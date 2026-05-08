@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Viva } from "@/lib/vivaService"
+import { Button } from "../ui/button"
 
 type Props = {
   isOpen: boolean
@@ -49,13 +50,13 @@ export default function CreateVivaModal({ isOpen, onClose, onCreate }: Props) {
         />
 
         <div className="flex justify-end gap-3">
-          <button onClick={onClose} className="px-4 py-2 border rounded-lg">
+          < Button onClick={onClose} >
             Cancel
-          </button>
+          </Button>
 
-          <button onClick={handleSubmit} className="btn-primary">
+          <Button onClick={handleSubmit} >
             Create
-          </button>
+          </Button>
         </div>
       </div>
     </div>
