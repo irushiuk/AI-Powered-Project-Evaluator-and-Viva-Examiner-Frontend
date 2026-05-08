@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run a full build before allowing commits to ensure build errors are caught
+echo "Running build before commit..."
+yarn build || {
+  echo "\nBuild failed. Abort commit." >&2
+  exit 1
+}
+
+echo "Build succeeded. Proceeding with commit."

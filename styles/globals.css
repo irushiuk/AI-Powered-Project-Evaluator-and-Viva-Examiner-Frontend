@@ -1,0 +1,40 @@
+@config "../tailwind.config.js";
+@import "tailwindcss";
+
+@theme {
+  --color-background: #ffffff;
+  --color-foreground: #0f172a;
+
+  --color-card: #ffffff;
+  --color-card-foreground: #0f172a;
+
+  --color-primary: #3757ff;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #eef2ff;
+  --color-secondary-foreground: #1e293b;
+
+  --color-muted: #f3f4f6;
+  --color-muted-foreground: #6b7280;
+
+  --color-accent: #7c3aed;
+  --color-accent-foreground: #ffffff;
+
+  --color-destructive: #ef4444;
+  --color-border: #e6e8eb;
+  --color-input: #e5e7eb;
+  --color-ring: #3757ff;
+}
+
+html, body, #__next {
+  height: 100%;
+}
+
+body {
+  background-color: white;
+  color: rgb(17 24 39);
+}
+
+.btn-primary {
+  @apply bg-gradient-to-r from-purple-500 to-pink-500 px-4 py-2 rounded-lg text-white hover:opacity-90 transition;
+}
