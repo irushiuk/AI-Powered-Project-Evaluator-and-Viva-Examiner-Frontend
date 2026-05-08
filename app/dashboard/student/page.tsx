@@ -1,5 +1,15 @@
 import DashboardLayout from "@/components/dashboard/DashboardLayout"
 
+type VivaCardProps = {
+  title: string
+  status: string
+}
+
+type StatProps = {
+  title: string
+  value: string
+}
+
 export default function StudentDashboard() {
   return (
     <DashboardLayout>
@@ -31,7 +41,7 @@ export default function StudentDashboard() {
 
 /* Components */
 
-function VivaCard({ title, status }: any) {
+function VivaCard({ title, status }: VivaCardProps) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200 flex justify-between items-center">
       <div>
@@ -46,7 +56,7 @@ function VivaCard({ title, status }: any) {
   )
 }
 
-function Stat({ title, value }: any) {
+function Stat({ title, value }: StatProps) {
   return (
     <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-6">
       <p className="opacity-70">{title}</p>

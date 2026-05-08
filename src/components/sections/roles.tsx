@@ -1,4 +1,4 @@
-import { GraduationCap, ShieldCheck, Upload, Eye, Mic2, MessageCircle, ClipboardList, Settings, BarChart3, CheckCircle } from "lucide-react"
+import { GraduationCap, ShieldCheck, Upload, Mic2, MessageCircle, ClipboardList, Settings, BarChart3, CheckCircle } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const studentFeatures = [

@@ -8,6 +8,15 @@ import DashboardLayout from "@/components/dashboard/DashboardLayout"
 import { Viva } from "@/lib/vivaService"
 import { Button } from "@/components/ui/button"
 
+type CardProps = {
+  title: string
+  value: string | number
+}
+
+type GlassCardProps = {
+  children: React.ReactNode
+}
+
 export default function TeacherDashboard() {
 
   const [open, setOpen] = useState(false)
@@ -141,7 +150,7 @@ export default function TeacherDashboard() {
 
 /* Components */
 
-function Card({ title, value }: any) {
+function Card({ title, value }: CardProps) {
   return (
     <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-6">
       <p className="opacity-70">{title}</p>
@@ -150,7 +159,7 @@ function Card({ title, value }: any) {
   )
 }
 
-function GlassCard({ children }: any) {
+function GlassCard({ children }: GlassCardProps) {
   return (
     <div className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
       {children}
