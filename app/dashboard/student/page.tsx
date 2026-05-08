@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/dashboard/DashboardLayout"
+import { Button } from "@/components/ui/button"
 
 type VivaCardProps = {
   title: string
@@ -49,9 +50,9 @@ function VivaCard({ title, status }: VivaCardProps) {
         <p className="opacity-60 text-sm">{status}</p>
       </div>
 
-      <button className="btn-primary">
+      <Button>
         {status === "Pending" ? "Start" : "View"}
-      </button>
+      </Button>
     </div>
   )
 }
