@@ -7,7 +7,7 @@ export type Viva = {
 }
 
 // Fake DB (temporary)
-let vivas: Viva[] = []
+const vivas: Viva[] = []
 
 export const vivaService = {
 
