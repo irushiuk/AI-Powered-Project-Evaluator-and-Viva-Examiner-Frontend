@@ -19,7 +19,6 @@ export default function SignupPage() {
     e.preventDefault()
     if (!agreed) return
     setIsLoading(true)
-    // Simulate signup
     await new Promise((resolve) => setTimeout(resolve, 1500))
     setIsLoading(false)
   }
@@ -135,8 +134,6 @@ export default function SignupPage() {
                   </button>
                 </div>
               </Field>
-
-              {/* Role selection removed — only students may register here. */}
             </FieldGroup>
 
             <div className="flex items-start gap-3">
