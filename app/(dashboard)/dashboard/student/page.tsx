@@ -6,7 +6,6 @@ import { vivaService } from "@/services/vivaService"
 import { Viva } from "@/types/viva"
 import { useEffect, useState } from "react"
 
-// Mock current student — replace with your auth context/session
 const CURRENT_STUDENT = {
   name: "Alex Johnson",
   email: "alex.johnson@student.edu",
@@ -59,14 +58,13 @@ export default function StudentDashboard() {
 
   return (
     <DashboardLayout>
-      <h1 className="text-3xl font-bold mb-6">Student Dashboard</h1>
+      <h1 className="mb-6 text-3xl font-bold">Student Dashboard</h1>
 
-      {/* Enrolled Vivas */}
       {enrolledVivas.length > 0 && (
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">
+          <h2 className="mb-4 text-xl font-semibold">
             My Enrolled Vivas
-            <span className="ml-2 text-sm font-normal bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+            <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 text-sm font-normal text-green-700">
               {enrolledVivas.length} enrolled
             </span>
           </h2>
@@ -84,12 +82,11 @@ export default function StudentDashboard() {
         </div>
       )}
 
-      {/* Available Vivas */}
       <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Available Vivas</h2>
+        <h2 className="mb-4 text-xl font-semibold">Available Vivas</h2>
         <div className="space-y-4">
           {availableVivas.length === 0 ? (
-            <div className="bg-white border rounded-xl p-6 text-gray-500">
+            <div className="rounded-xl border bg-white p-6 text-gray-500">
               No vivas available
             </div>
           ) : (
@@ -106,9 +103,8 @@ export default function StudentDashboard() {
         </div>
       </div>
 
-      {/* Performance */}
       <div>
-        <h2 className="text-xl font-semibold mb-4">Performance</h2>
+        <h2 className="mb-4 text-xl font-semibold">Performance</h2>
         <div className="grid grid-cols-3 gap-6">
           <Stat title="Avg Score" value="82%" />
           <Stat title="Completed" value="5" />
@@ -119,44 +115,37 @@ export default function StudentDashboard() {
   )
 }
 
-/* Components */
-
 function VivaCard({ viva, isEnrolled, isLoading, onEnroll }: VivaCardProps) {
   const canEnroll =
     viva.status === "Enrollment Open" &&
     new Date(viva.enrollmentDeadline) >= new Date(new Date().toDateString())
   return (
-    <div className={`bg-white p-5 rounded-xl border flex justify-between items-center gap-4 ${
+    <div className={`flex items-center justify-between gap-4 rounded-xl border bg-white p-5 ${
       isEnrolled ? "border-green-200 bg-green-50/40" : "border-gray-200"
     }`}>
       <div className="flex-1">
         <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-lg">{viva.module}</h3>
+          <h3 className="text-lg font-semibold">{viva.module}</h3>
           {isEnrolled && (
-            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+            <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
               Enrolled
             </span>
           )}
         </div>
 
-        <p className="opacity-60 text-sm mt-1">{viva.status}</p>
-        <p className="text-sm text-gray-500 mt-1">Duration: {viva.duration} mins</p>
-        <p className="text-sm text-gray-500">
-          Enrollment Deadline: {viva.enrollmentDeadline}
-        </p>
+        <p className="mt-1 text-sm opacity-60">{viva.status}</p>
+        <p className="mt-1 text-sm text-gray-500">Duration: {viva.duration} mins</p>
+        <p className="text-sm text-gray-500">Enrollment Deadline: {viva.enrollmentDeadline}</p>
 
-        <div className="flex flex-wrap gap-2 mt-3">
+        <div className="mt-3 flex flex-wrap gap-2">
           {viva.rubrics.map((rubric) => (
-            <div
-              key={rubric.id}
-              className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full"
-            >
+            <div key={rubric.id} className="rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700">
               {rubric.title} ({rubric.maxMarks})
             </div>
           ))}
         </div>
 
-        <p className="text-xs text-gray-400 mt-2">
+        <p className="mt-2 text-xs text-gray-400">
           👥 {viva.enrolledStudents.length} student{viva.enrolledStudents.length !== 1 ? "s" : ""} enrolled
         </p>
       </div>
@@ -165,10 +154,7 @@ function VivaCard({ viva, isEnrolled, isLoading, onEnroll }: VivaCardProps) {
         {isEnrolled ? (
           <Button variant="outline" disabled>Enrolled ✓</Button>
         ) : (
-          <Button
-            onClick={onEnroll}
-            disabled={isLoading || !canEnroll}
-          >
+          <Button onClick={onEnroll} disabled={isLoading || !canEnroll}>
             {isLoading ? "Enrolling..." : canEnroll ? "Enroll" : "Closed"}
           </Button>
         )}
@@ -179,9 +165,9 @@ function VivaCard({ viva, isEnrolled, isLoading, onEnroll }: VivaCardProps) {
 
 function Stat({ title, value }: StatProps) {
   return (
-    <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-6">
+    <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
       <p className="opacity-70">{title}</p>
-      <h2 className="text-2xl font-bold mt-2">{value}</h2>
+      <h2 className="mt-2 text-2xl font-bold">{value}</h2>
     </div>
   )
 }
