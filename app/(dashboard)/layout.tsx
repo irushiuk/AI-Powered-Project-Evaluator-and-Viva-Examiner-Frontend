@@ -1,13 +1,21 @@
-import type { ReactNode } from 'react'
-import { Footer } from '@/components/Footer'
+import { DashboardFooter } from '@/components/DashboardFooter'
 import { DashboardNavbar } from '@/components/DashboardNavbar'
 
-export default function DashboardGroupLayout({ children }: { children: ReactNode }) {
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50 text-gray-900">
+    <div className="min-h-screen bg-background flex flex-col">
       <DashboardNavbar />
-      <div className="flex flex-1">{children}</div>
-      <Footer />
+
+      {/* Main Content */}
+      <main className="mx-auto flex-1 w-full max-w-full px-4 sm:px-5 lg:px-12 py-6">
+        {children}
+      </main>
+
+      <DashboardFooter />
     </div>
   )
 }
