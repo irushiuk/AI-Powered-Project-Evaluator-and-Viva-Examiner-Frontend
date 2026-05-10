@@ -1,7 +1,7 @@
 import { mockEnrollments } from "@/mock/mockEnrollments"
 import { VivaEnrollment } from "@/types/enrollment"
 
-let enrollments = [...mockEnrollments]
+const enrollments = [...mockEnrollments]
 
 export const enrollmentService = {
 

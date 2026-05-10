@@ -20,7 +20,6 @@ export default function ForgotPasswordPage() {
       setMessage("Please fill this field")
       return
     }
-    // basic email format check
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(value)) {
       setMessage("Please enter a valid university email")
@@ -35,7 +34,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-start py-12 px-4 bg-muted/30">
+    <div className="flex min-h-screen flex-col items-center justify-start bg-muted/30 px-4 py-12">
       <Link href="/" className="mb-8 flex items-center gap-2">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
           <GraduationCap className="h-6 w-6 text-primary-foreground" />

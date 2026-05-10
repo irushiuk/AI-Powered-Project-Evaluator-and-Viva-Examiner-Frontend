@@ -15,13 +15,12 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
-    // Simulate login - role-based redirect would happen here
     await new Promise((resolve) => setTimeout(resolve, 1500))
     setIsLoading(false)
   }
 
   return (
-    <div className="flex flex-col items-center justify-start py-12 flex-1 bg-muted/30 px-4">
+    <div className="flex flex-1 flex-col items-center justify-start bg-muted/30 px-4 py-12">
       <div className="absolute inset-0 -z-10">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(120,119,198,0.1),transparent)]" />
       </div>

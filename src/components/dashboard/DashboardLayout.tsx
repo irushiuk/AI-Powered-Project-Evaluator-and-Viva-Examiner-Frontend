@@ -20,10 +20,10 @@ export default function DashboardLayout({
   const handleSetActivePage = setActivePage ?? setInternalActivePage
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 text-gray-900 flex">
+    <div className="flex flex-1">
 
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 p-6">
+      <aside className="w-64 bg-white border-r border-gray-200 p-5 lg:p-6">
 
         <h1 className="text-2xl font-bold mb-8">
           AI Viva
@@ -64,7 +64,7 @@ export default function DashboardLayout({
       </aside>
 
       {/* Main */}
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-4 sm:p-5 lg:p-6">
         {children}
       </main>
 
