@@ -12,22 +12,49 @@ import {
   User,
 } from 'lucide-react'
 import { useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 
 export function DashboardNavbar() {
   const [profileOpen, setProfileOpen] = useState(false)
+  const pathname = usePathname()
+  const showStudentNavLinks = pathname.startsWith('/dashboard/student')
+
+  const navLinkClass = (href: string) =>
+    `rounded-full px-4 py-2 text-sm font-medium transition ${
+      pathname === href
+        ? 'bg-primary text-primary-foreground'
+        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+    }`
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-card">
       <div className="mx-auto max-w-full px-4 sm:px-5 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
+        <div className="flex h-16 items-center justify-between gap-4">
           <Link
-            href="/dashboard/sessions"
+            href="/"
             className="flex items-center gap-2 text-lg font-bold transition hover:opacity-80"
           >
             <GraduationCap className="h-6 w-6 text-primary" />
             <span>VivaSense</span>
           </Link>
+
+          {showStudentNavLinks && (
+            <nav className="hidden items-center gap-2 md:flex">
+              <Link
+                href="/dashboard/student/sessions/all"
+                className={navLinkClass('/dashboard/student/sessions/all')}
+              >
+                All Sessions
+              </Link>
+              <Link
+                href="/dashboard/student/sessions"
+                className={navLinkClass('/dashboard/student/sessions')}
+              >
+                My Sessions
+              </Link>
+            </nav>
+          )}
 
           <div className="flex items-center gap-2">
             <DropdownMenu.Root>
