@@ -190,15 +190,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-        // If the access token should still be valid, refresh silently and restore a validated user from storage.
+        // If the access token should still be valid, refresh silently and restore user from storage.
         if (hasFreshTokenWindow) {
           const storedUser = parseStoredUser()
           if (storedUser && refresh) {
-            const tokens = await authService.refreshAccessToken(refresh)
-            if (!mounted) return
-
-            applyTokens(tokens)
-            setUser(storedUser)
+            try {
+              const tokens = await authService.refreshAccessToken(refresh)
+              if (!mounted) return
+              applyTokens(tokens)
+              setUser(storedUser)
+            } catch {
+              // Transient failure — still restore from storage so user isn't logged out.
+              if (mounted) setUser(storedUser)
+            }
             return
           }
         }
@@ -216,13 +220,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(currentUser)
         localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(currentUser))
       } catch (err) {
-        localStorage.removeItem(STORAGE_KEYS.refreshToken)
-        localStorage.removeItem(STORAGE_KEYS.user)
-        localStorage.removeItem(STORAGE_KEYS.accessTokenExpiresAt)
-        clearCookie(COOKIE_NAMES.hasSession)
-        clearCookie(COOKIE_NAMES.userRole)
-        setUser(null)
-        setAccessToken(null)
+        if (!mounted) return
+
+        // Only clear the session for real auth rejections (401/403).
+        // Transient network errors should NOT log the user out on a simple page refresh.
+        const status = (err as { status?: number })?.status
+        const isAuthError = status === 401 || status === 403
+
+        if (isAuthError) {
+          localStorage.removeItem(STORAGE_KEYS.refreshToken)
+          localStorage.removeItem(STORAGE_KEYS.user)
+          localStorage.removeItem(STORAGE_KEYS.accessTokenExpiresAt)
+          clearCookie(COOKIE_NAMES.hasSession)
+          clearCookie(COOKIE_NAMES.userRole)
+          setUser(null)
+          setAccessToken(null)
+        } else {
+          // Transient failure — restore stored user so the page doesn't redirect to /login.
+          const storedUser = (() => {
+            const rawUser = localStorage.getItem(STORAGE_KEYS.user)
+            if (!rawUser) return null
+            try { return JSON.parse(rawUser) as AuthUser } catch { return null }
+          })()
+          if (storedUser) setUser(storedUser)
+        }
       } finally {
         if (mounted) setIsLoading(false)
       }
