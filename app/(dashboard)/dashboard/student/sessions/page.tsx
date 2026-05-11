@@ -224,14 +224,14 @@ export default function SessionsPage() {
     <div className="space-y-8">
       {/* Page Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Evaluation Sessions</h1>
-        <p className="text-muted-foreground mt-2">Manage and track your project evaluation sessions</p>
+        <h1 className="text-3xl font-bold tracking-tight">My Sessions</h1>
+        <p className="text-muted-foreground mt-2">Your current project evaluation sessions and submission status</p>
       </div>
 
       {/* Top Session Alert */}
       {topSession && (
         <Link href={`/dashboard/student/sessions/${topSession.id}`}>
-          <Card className="bg-gradient-to-r from-primary/5 to-accent/5 border-primary/20 hover:border-primary/40 cursor-pointer transition-all">
+          <Card className="bg-linear-to-r from-primary/5 to-accent/5 border-primary/20 hover:border-primary/40 cursor-pointer transition-all">
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="space-y-2 flex-1">
@@ -274,19 +274,19 @@ export default function SessionsPage() {
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger
             value="upcoming"
-            className="flex items-center gap-2 data-[state=active]:!bg-primary data-[state=active]:!text-primary-foreground"
+            className="flex items-center gap-2 data-[state=active]:bg-primary! data-[state=active]:text-primary-foreground!"
           >
             Upcoming ({upcomingSessions.length})
           </TabsTrigger>
           <TabsTrigger
             value="ongoing"
-            className="flex items-center gap-2 data-[state=active]:!bg-primary data-[state=active]:!text-primary-foreground"
+            className="flex items-center gap-2 data-[state=active]:bg-primary! data-[state=active]:text-primary-foreground!"
           >
             Ongoing ({ongoingSessions.length})
           </TabsTrigger>
           <TabsTrigger
             value="completed"
-            className="flex items-center gap-2 data-[state=active]:!bg-primary data-[state=active]:!text-primary-foreground"
+            className="flex items-center gap-2 data-[state=active]:bg-primary! data-[state=active]:text-primary-foreground!"
           >
             Completed ({completedSessions.length})
           </TabsTrigger>
