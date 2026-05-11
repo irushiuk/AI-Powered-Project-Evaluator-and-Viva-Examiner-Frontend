@@ -1,8 +1,14 @@
+'use client'
+
 import Link from "next/link"
-import { ArrowRight, CheckCircle2, FileText, Code, Mic } from "lucide-react"
+import { ArrowRight, CheckCircle2, FileText, Code, LayoutDashboard, Mic } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useAuthContext } from "@/context/AuthContext"
+import { getPostLoginRedirect } from "@/utils/routes"
 
 export function HeroSection() {
+  const { isAuthenticated, isLoading, user } = useAuthContext()
+  const dashboardHref = user ? getPostLoginRedirect(user.role) : '/dashboard'
   return (
     <section className="relative overflow-hidden py-20 md:py-16">
       {/* Background gradient */}
@@ -31,10 +37,17 @@ export function HeroSection() {
 
             <div className="flex flex-col gap-4 sm:flex-row">
               <Button size="lg" asChild>
-                <Link href="/signup">
-                  Get Started
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+                {!isLoading && isAuthenticated && user ? (
+                  <Link href={dashboardHref}>
+                    Go to Dashboard
+                    <LayoutDashboard className="ml-2 h-4 w-4" />
+                  </Link>
+                ) : (
+                  <Link href="/signup">
+                    Get Started
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                )}
               </Button>
               <Button size="lg" variant="outline" asChild className="text-foreground hover:text-foreground">
                 <Link href="#features">View Features</Link>

@@ -67,10 +67,26 @@ export async function registerStudent(payload: RegisterStudentRequest): Promise<
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw err || new Error('Registration failed')
+    // Surface backend validation errors as a readable message
+    if (err.errors) {
+      const messages = Object.entries(err.errors)
+        .map(([field, msgs]) => `${field}: ${Array.isArray(msgs) ? msgs.join(', ') : msgs}`)
+        .join('; ')
+      throw new Error(messages || err.message || 'Registration failed')
+    }
+    throw new Error(err.message || 'Registration failed')
   }
   const payloadResponse = await res.json()
   const data = payloadResponse.data ?? payloadResponse
+
+  // Backend may return data: null on success (registration only, no auto-login)
+  if (!data || !data.user) {
+    return {
+      user: null as unknown as RegisterResponse['user'],
+      message: payloadResponse.message || 'Registration successful',
+    }
+  }
+
   return {
     user: data.user,
     access: data.access,
