@@ -2,10 +2,10 @@ export const API_BASE = (typeof process !== 'undefined' ? process.env.NEXT_PUBLI
 
 export const AUTH_API = {
   login: `${API_BASE}/auth/login/`,
-  refresh: `${API_BASE}/auth/refresh/`,
+  refresh: `${API_BASE}/auth/token/refresh/`,
   me: `${API_BASE}/auth/me/`,
   logout: `${API_BASE}/auth/logout/`,
-  registerStudent: `${API_BASE}/auth/register/student/`,
+  registerStudent: `${API_BASE}/auth/student/register/`,
 }
 
 export default {

@@ -1,6 +1,7 @@
 import '../styles/globals.css'
 import { Poppins } from 'next/font/google'
 import AuthProvider from '@/context/AuthContext'
+import { Toaster } from '@/components/ui/sonner'
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -21,7 +22,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={poppins.className}>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          {children}
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   )

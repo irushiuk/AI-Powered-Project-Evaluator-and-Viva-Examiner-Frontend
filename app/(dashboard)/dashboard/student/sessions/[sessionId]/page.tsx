@@ -43,7 +43,7 @@ export default function SessionDetailPage() {
 
       <div className="mt-8">
         {session.status === 'upcoming' && <SessionUpcomingView session={session} />}
-        {session.status === 'ongoing' && <SessionOngoingView />}
+        {session.status === 'ongoing' && <SessionOngoingView rubrics={session.rubrics} />}
         {session.status === 'completed' && session.results && (
           <SessionCompletedView results={session.results} />
         )}
