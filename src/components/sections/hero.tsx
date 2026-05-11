@@ -41,16 +41,6 @@ export function HeroSection() {
               </Button>
             </div>
 
-            <div className="flex gap-4">
-                <Link href="/dashboard/student">
-                  <Button>I'm a Student</Button>
-                </Link>
-
-                <Link href="/dashboard/teacher">
-                  <Button>I'm a Teacher</Button>
-                </Link>
-              </div>
-
             <div className="flex flex-wrap items-center gap-x-8 gap-y-4 pt-4">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <CheckCircle2 className="h-4 w-4 text-primary" />
@@ -69,7 +59,7 @@ export function HeroSection() {
 
           {/* Dashboard Preview Card */}
           <div className="relative">
-            <div className="absolute -inset-4 rounded-3xl bg-gradient-to-r from-primary/20 via-accent/10 to-primary/5 blur-2xl" />
+            <div className="absolute -inset-4 rounded-3xl bg-linear-to-r from-primary/20 via-accent/10 to-primary/5 blur-2xl" />
             <div className="relative rounded-2xl border border-border bg-card p-6 shadow-xl">
               <div className="mb-4 flex items-center gap-2">
                 <div className="h-3 w-3 rounded-full bg-destructive/60" />

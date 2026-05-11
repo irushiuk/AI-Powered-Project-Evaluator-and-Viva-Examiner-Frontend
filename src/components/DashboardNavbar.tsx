@@ -14,10 +14,12 @@ import {
 import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { useAuthContext } from '@/context/AuthContext'
 
 export function DashboardNavbar() {
   const [profileOpen, setProfileOpen] = useState(false)
   const pathname = usePathname()
+  const { logout, user } = useAuthContext()
   const showStudentNavLinks = pathname.startsWith('/dashboard/student')
 
   const navLinkClass = (href: string) =>
@@ -114,7 +116,10 @@ export function DashboardNavbar() {
                     </Link>
                   </DropdownMenu.Item>
                   <DropdownMenu.Separator className="my-1 h-px bg-border" />
-                  <DropdownMenu.Item className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm text-destructive outline-none transition hover:bg-gray-100 focus:bg-gray-100">
+                  <DropdownMenu.Item
+                    className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm text-destructive outline-none transition hover:bg-gray-100 focus:bg-gray-100"
+                    onSelect={() => logout()}
+                  >
                     <LogOut className="h-4 w-4" />
                     Logout
                   </DropdownMenu.Item>
