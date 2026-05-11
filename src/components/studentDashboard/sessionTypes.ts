@@ -1,5 +1,21 @@
 export type SessionStatus = 'upcoming' | 'ongoing' | 'completed'
 
+export type RubricCriteria = {
+  criteria_id: string
+  criteria_name: string
+  max_score: number
+  weight_in_category: number | null
+  description: string | null
+}
+
+export type RubricCategory = {
+  category_id: string
+  category_name: string
+  weight_percentage: number
+  description: string | null
+  criteria: RubricCriteria[]
+}
+
 export type CodeAnalysis = {
   bugs: number
   vulnerabilities: number
@@ -35,5 +51,7 @@ export type StudentSession = {
   time: string
   status: SessionStatus
   description: string
+  rubrics?: RubricCategory[]
   results?: SessionResults
 }
+

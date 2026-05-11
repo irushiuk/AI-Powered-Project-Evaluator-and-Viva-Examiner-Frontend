@@ -1,8 +1,7 @@
 import { mockVivas } from "@/mock/mockVivas"
 import { Viva , EnrolledStudent , VivaStatus} from "@/types/viva"
 
-const vivas = [...mockVivas]
-
+let vivas = [...mockVivas]
 export const vivaService = {
 
   async getVivas(): Promise<Viva[]> {
@@ -56,4 +55,18 @@ export const vivaService = {
 
     return viva
   },
+
+
+  async updateViva(id: string, data: Omit<Viva, "id">): Promise<Viva> {
+  const idx = vivas.findIndex((v) => v.id === id)
+  if (idx === -1) throw new Error("Viva not found")
+  vivas[idx] = { ...vivas[idx], ...data }
+  return vivas[idx]
+},
+
+  async deleteViva(id: string): Promise<void> {
+    vivas = vivas.filter((v) => v.id !== id)
+  },
+
+  
 }
