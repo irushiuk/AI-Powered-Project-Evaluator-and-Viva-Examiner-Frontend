@@ -41,13 +41,13 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="username">Username</FieldLabel>
+                <FieldLabel htmlFor="email">Email</FieldLabel>
                 <Input
-                  id="username"
-                  type="text"
-                  placeholder="username"
+                  id="email"
+                  type="email"
+                  placeholder="your.email@university.edu"
                   required
-                  autoComplete="username"
+                  autoComplete="email"
                 />
               </Field>
 

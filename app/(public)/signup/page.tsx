@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -69,11 +70,61 @@ export default function SignupPage() {
               </Field>
 
               <Field>
-                <FieldLabel htmlFor="registerNumber">Register Number</FieldLabel>
+                <FieldLabel htmlFor="registerNumber">Registration Number</FieldLabel>
                 <Input
                   id="registerNumber"
                   type="text"
-                  placeholder="EG-xxxx-yyyy"
+                  placeholder="4798"
+                  required
+                  autoComplete="off"
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="degreeProgram">Degree Program</FieldLabel>
+                <Select>
+                  <SelectTrigger id="degreeProgram">
+                    <SelectValue placeholder="Select degree program" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="B.Sc.Eng. (Civil and Environmental Engineering)">
+                      B.Sc.Eng. (Civil and Environmental Engineering)
+                    </SelectItem>
+                    <SelectItem value="B.Sc.Eng. (Computer Engineering)">
+                      B.Sc.Eng. (Computer Engineering)
+                    </SelectItem>
+                    <SelectItem value="B.Sc.Eng. (Electrical and Information Engineering)">
+                      B.Sc.Eng. (Electrical and Information Engineering)
+                    </SelectItem>
+                    <SelectItem value="B.Sc.Eng. (Marine Engineering and Naval Architecture)">
+                      B.Sc.Eng. (Marine Engineering and Naval Architecture)
+                    </SelectItem>
+                    <SelectItem value="B.Sc.Eng. (Mechanical and Manufacturing Engineering)">
+                      B.Sc.Eng. (Mechanical and Manufacturing Engineering)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="academicYear">Academic Year</FieldLabel>
+                <Input
+                  id="academicYear"
+                  type="number"
+                  placeholder="4"
+                  required
+                  autoComplete="off"
+                  min="1"
+                  max="10"
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="batch">Batch</FieldLabel>
+                <Input
+                  id="batch"
+                  type="text"
+                  placeholder="2021"
                   required
                   autoComplete="off"
                 />
