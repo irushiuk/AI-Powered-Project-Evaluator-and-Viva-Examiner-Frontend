@@ -1,5 +1,6 @@
 import { DashboardFooter } from '@/components/DashboardFooter'
 import { DashboardNavbar } from '@/components/DashboardNavbar'
+import ProtectedRoute from '@/components/auth/ProtectedRoute'
 
 export default function DashboardLayout({
   children,
@@ -7,15 +8,17 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <DashboardNavbar />
+    <ProtectedRoute>
+      <div className="min-h-screen bg-background flex flex-col">
+        <DashboardNavbar />
 
-      {/* Main Content */}
-      <main className="mx-auto flex-1 w-full max-w-full px-4 sm:px-5 lg:px-12 py-6">
-        {children}
-      </main>
+        {/* Main Content */}
+        <main className="mx-auto flex-1 w-full max-w-full px-4 sm:px-5 lg:px-12 py-6">
+          {children}
+        </main>
 
-      <DashboardFooter />
-    </div>
+        <DashboardFooter />
+      </div>
+    </ProtectedRoute>
   )
 }
