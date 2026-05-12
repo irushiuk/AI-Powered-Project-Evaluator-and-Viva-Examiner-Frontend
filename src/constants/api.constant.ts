@@ -51,10 +51,27 @@ export const STUDENT_API = {
   enroll: (id: string) => `${API_BASE}/projects/${id}/enroll/`,
   myEnrollments: `${API_BASE}/projects/my-enrollments/`,
 }
+
+export const PROJECT_API = {
+  available: `${API_BASE}/projects/available/`,
+  myEnrollments: `${API_BASE}/projects/my-enrollments/`,
+  enroll: (projectId: string) => `${API_BASE}/projects/${projectId}/enroll/`,
+  submission: (projectId: string) => `${API_BASE}/projects/${projectId}/submission/`,
+  submitWork: (projectId: string) => `${API_BASE}/projects/${projectId}/submit/`,
+}
+
+export const SESSION_API = {
+  next: `${API_BASE}/projects/sessions/next/`,
+  myStatus: (status?: string) =>
+    `${API_BASE}/sessions/my-status/${status ? `?status=${encodeURIComponent(status)}` : ''}`,
+  mySession: (projectId: string) => `${API_BASE}/projects/${projectId}/sessions/my-session/`,
+}
  
 export default {
   API_BASE,
   AUTH_API,
+  PROJECT_API,
+  SESSION_API,
   PROJECTS_API,
   SESSIONS_API,
   STUDENT_API,

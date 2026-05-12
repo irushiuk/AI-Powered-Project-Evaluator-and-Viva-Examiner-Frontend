@@ -1,7 +1,6 @@
 'use client'
 
 import { useParams, useRouter } from 'next/navigation'
-import { useState } from 'react'
 import {
   ArrowLeft,
   Calendar,
@@ -25,117 +24,25 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { SubmissionForm } from './SubmissionForm'
 import Link from 'next/link'
+import type { EnrolledProject } from '@/types/project'
 
-// ── Types ─────────────────────────────────────────────────────────────────
-type SessionDetails = {
-  session_id: string
-  scheduled_start: string
-  scheduled_end: string
-  location_room: string
-  status: 'scheduled' | 'in_progress' | 'completed'
+type SubmissionDetails = {
+  submitted_at: string
+  github_repo_url: string | null
+  report_file_url: string | null
 }
 
-type GroupInfo = {
-  group_id: string
-  group_name: string
-  members: string[]
+interface ProjectDetailViewProps {
+  initialProject?: EnrolledProject | null
+  initialSubmissionData?: SubmissionDetails | null
 }
 
-type ProjectDetail = {
-  id: string
-  project_name: string
-  description: string | null
-  is_group_project: boolean
-  submission_deadline: string | null
-  status: string
-  academic_year: string | null
-  submission_status: 'submitted' | 'not_submitted'
-  session_details: SessionDetails | null
-  group_info: GroupInfo | null
-  submission?: {
-    github_repo_url: string | null
-    report_file_url: string | null
-    submitted_at: string
-  }
-}
-
-// ── Mock data ─────────────────────────────────────────────────────────────
-const MOCK_PROJECTS: Record<string, ProjectDetail> = {
-  '105': {
-    id: '105',
-    project_name: 'Industrial Robot Arm Control Platform',
-    description:
-      'Build a control interface for industrial robot arm operations with real-time feedback.',
-    is_group_project: true,
-    submission_deadline: null,
-    status: 'active',
-    academic_year: '2025/2026',
-    submission_status: 'not_submitted',
-    session_details: null,
-    group_info: {
-      group_id: 'g1',
-      group_name: 'Team Alpha',
-      members: ['John Doe', 'Jane Smith', 'You'],
-    },
-    submission: undefined,
-  },
-  '201': {
-    id: '201',
-    project_name: 'E-Commerce Platform',
-    description:
-      'Design and implement a full-stack e-commerce platform with payment integration.',
-    is_group_project: false,
-    submission_deadline: '2026-05-20T23:59:00Z',
-    status: 'active',
-    academic_year: '2025/2026',
-    submission_status: 'submitted',
-    session_details: {
-      session_id: '3',
-      scheduled_start: '2026-05-25T10:00:00Z',
-      scheduled_end: '2026-05-25T10:30:00Z',
-      location_room: 'Room 301',
-      status: 'scheduled',
-    },
-    group_info: null,
-    submission: {
-      github_repo_url: 'https://github.com/username/ecommerce-platform',
-      report_file_url: 'https://drive.google.com/some-report',
-      submitted_at: '2026-05-15T14:30:00Z',
-    },
-  },
-  '202': {
-    id: '202',
-    project_name: 'Machine Learning Model',
-    description:
-      'Train and evaluate a machine learning model for sentiment analysis.',
-    is_group_project: false,
-    submission_deadline: '2025-05-08T23:59:00Z',
-    status: 'completed',
-    academic_year: '2024/2025',
-    submission_status: 'submitted',
-    session_details: {
-      session_id: '5',
-      scheduled_start: '2025-05-10T11:00:00Z',
-      scheduled_end: '2025-05-10T11:30:00Z',
-      location_room: 'Room 201',
-      status: 'completed',
-    },
-    group_info: null,
-    submission: {
-      github_repo_url: 'https://github.com/username/ml-model',
-      report_file_url: 'https://drive.google.com/ml-report',
-      submitted_at: '2025-05-07T09:15:00Z',
-    },
-  },
-}
-
-export function ProjectDetailView() {
+export function ProjectDetailView({ initialProject = null, initialSubmissionData = null }: ProjectDetailViewProps) {
   const params = useParams()
   const router = useRouter()
   const projectId = params.projectId as string
-
-  // TODO: Replace with real API call
-  const project = MOCK_PROJECTS[projectId]
+  const project = initialProject
+  const submissionData = initialSubmissionData
 
   if (!project) {
     return (
@@ -147,7 +54,7 @@ export function ProjectDetailView() {
         <Card>
           <CardContent className="pt-8">
             <p className="text-center text-muted-foreground">
-              Project not found.
+              Project not found or you are not enrolled.
             </p>
           </CardContent>
         </Card>
@@ -262,7 +169,7 @@ export function ProjectDetailView() {
       )}
 
       {/* Submission Section */}
-      {hasSubmitted && project.submission ? (
+      {hasSubmitted && submissionData ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -271,7 +178,7 @@ export function ProjectDetailView() {
             </CardTitle>
             <CardDescription>
               Submitted on{' '}
-              {new Date(project.submission.submitted_at).toLocaleDateString(
+              {new Date(submissionData.submitted_at).toLocaleDateString(
                 'en-US',
                 {
                   weekday: 'long',
@@ -283,29 +190,29 @@ export function ProjectDetailView() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {project.submission.github_repo_url && (
+            {submissionData.github_repo_url && (
               <div>
                 <p className="text-sm font-medium text-muted-foreground">
                   GitHub Repository
                 </p>
                 <a
-                  href={project.submission.github_repo_url}
+                  href={submissionData.github_repo_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-1 flex items-center gap-2 text-primary hover:underline"
                 >
                   <Github className="h-4 w-4" />
-                  {project.submission.github_repo_url}
+                  {submissionData.github_repo_url}
                 </a>
               </div>
             )}
-            {project.submission.report_file_url && (
+            {submissionData.report_file_url && (
               <div>
                 <p className="text-sm font-medium text-muted-foreground">
                   Project Report
                 </p>
                 <a
-                  href={project.submission.report_file_url}
+                  href={submissionData.report_file_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-1 flex items-center gap-2 text-primary hover:underline"
@@ -329,7 +236,10 @@ export function ProjectDetailView() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <SubmissionForm />
+            <SubmissionForm 
+              projectId={projectId} 
+              onSuccess={() => router.refresh()} 
+            />
           </CardContent>
         </Card>
       )}

@@ -1,5 +1,8 @@
 import { ExploreProjectsView } from '@/components/studentDashboard/ExploreProjectsView'
+import { serverProjectService } from '@/services/server/projectService'
 
-export default function ExploreProjectsPage() {
-  return <ExploreProjectsView />
+export default async function ExploreProjectsPage() {
+  const initialProjects = await serverProjectService.getAvailableProjects().catch(() => [])
+
+  return <ExploreProjectsView initialProjects={initialProjects} />
 }
