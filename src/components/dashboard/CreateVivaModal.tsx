@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"  // add useEffect
+import { useState, useEffect } from "react" 
 import { Viva } from "@/types/viva"
 import { Button } from "../ui/button"
 import { Rubric } from "@/types/rubric"

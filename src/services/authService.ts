@@ -1,4 +1,4 @@
-import { LoginResponse, RegisterResponse, RegisterStudentRequest, TokenRefreshResponse } from '@/types/auth'
+import { LoginResponse, RegisterResponse, RegisterStudentRequest, RegisterExaminerRequest, TokenRefreshResponse } from '@/types/auth'
 import { AUTH_API } from '@/constants/api.constant'
 
 export async function login(email: string, password: string): Promise<LoginResponse> {
@@ -12,7 +12,6 @@ export async function login(email: string, password: string): Promise<LoginRespo
     throw err || new Error('Login failed')
   }
   const payload = await res.json()
-  
   const data = payload.data ?? payload
   return {
     user: data.user,
@@ -20,8 +19,6 @@ export async function login(email: string, password: string): Promise<LoginRespo
     refresh: data.refresh,
   }
 }
-
-
 
 export async function refreshAccessToken(refresh: string): Promise<TokenRefreshResponse> {
   const res = await fetch(AUTH_API.refresh, {
@@ -31,10 +28,9 @@ export async function refreshAccessToken(refresh: string): Promise<TokenRefreshR
   })
   if (!res.ok) throw new Error('Failed to refresh token')
   const data = await res.json()
-  
   return {
     access: data.access,
-    refresh: data.refresh,
+    refresh: data.refresh ?? refresh,
   }
 }
 
@@ -87,6 +83,26 @@ export async function registerStudent(payload: RegisterStudentRequest): Promise<
     }
   }
 
+  return {
+    user: data.user,
+    access: data.access,
+    refresh: data.refresh,
+    message: data.message,
+  }
+}
+
+export async function registerExaminer(payload: RegisterExaminerRequest): Promise<RegisterResponse> {
+  const res = await fetch(AUTH_API.registerExaminer, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw err || new Error('Registration failed')
+  }
+  const payloadResponse = await res.json()
+  const data = payloadResponse.data ?? payloadResponse
   return {
     user: data.user,
     access: data.access,
