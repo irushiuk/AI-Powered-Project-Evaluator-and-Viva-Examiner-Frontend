@@ -102,7 +102,7 @@ function SessionCard({ session }: { session: StudentSessionSummary }) {
           )}
         </div>
 
-        <Link href={`/dashboard/student/sessions/${session.session_id}`}>
+        <Link href={`/dashboard/student/sessions/${session.session_id}?projectId=${session.project_id}`}>
           <Button className="w-full cursor-pointer" variant={status === 'completed' ? 'outline' : 'default'}>
             {config.action}
             <ArrowRight className="ml-2 h-4 w-4" />
@@ -151,7 +151,7 @@ export function MySessionsView({ nextSession, sessionsByStatus }: MySessionsView
       </div>
 
       {nextSession && nextStart && (
-        <Link href={`/dashboard/student/sessions/${nextSession.session_id}`}>
+        <Link href={`/dashboard/student/sessions/${nextSession.session_id}?projectId=${nextSession.project_id}`}>
           <Card className="border-primary/20 bg-primary/5 transition hover:border-primary/40">
             <CardHeader>
               <div className="flex items-start justify-between gap-4">
@@ -190,6 +190,8 @@ export function MySessionsView({ nextSession, sessionsByStatus }: MySessionsView
           </Card>
         </Link>
       )}
+
+      <div className='-mt-5'></div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as SessionStatusFilter)} className="w-full">
         <TabsList className="grid w-full grid-cols-3">

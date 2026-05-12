@@ -20,6 +20,7 @@ export const SESSION_API = {
   next: `${API_BASE}/projects/sessions/next/`,
   myStatus: (status?: string) =>
     `${API_BASE}/sessions/my-status/${status ? `?status=${encodeURIComponent(status)}` : ''}`,
+  mySession: (projectId: string) => `${API_BASE}/projects/${projectId}/sessions/my-session/`,
 }
 
 export default {

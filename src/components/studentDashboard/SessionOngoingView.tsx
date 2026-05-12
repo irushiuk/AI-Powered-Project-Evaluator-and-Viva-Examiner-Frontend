@@ -1,4 +1,4 @@
-import { Play } from 'lucide-react'
+import { Play, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { RubricCard } from './RubricCard'
@@ -38,6 +38,21 @@ export function SessionOngoingView({ sessionId, rubrics }: SessionOngoingViewPro
       {/* Evaluation Rubric */}
       {rubrics && rubrics.length > 0 && (
         <RubricCard rubrics={rubrics} />
+      )}
+      {(!rubrics || rubrics.length === 0) && (
+        <Card className="border-dashed border-amber-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-600" />
+              Evaluation Rubric
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              The evaluation rubric is not yet available for this session.
+            </p>
+          </CardContent>
+        </Card>
       )}
     </div>
   )
