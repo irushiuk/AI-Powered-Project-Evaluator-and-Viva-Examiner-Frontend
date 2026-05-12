@@ -1,6 +1,6 @@
 import { PROJECT_API } from '@/constants/api.constant'
+import type { AvailableProject, EnrolledProject } from '@/types/project'
 import { serverFetch } from '../serverApi'
-import type { AvailableProject, EnrolledProject } from '../projectService'
 
 export const serverProjectService = {
   async getAvailableProjects(): Promise<AvailableProject[]> {

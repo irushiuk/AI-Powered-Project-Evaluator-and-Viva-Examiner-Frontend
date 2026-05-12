@@ -39,7 +39,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 
 import { toast } from 'sonner'
-import type { AvailableProject } from '@/services/projectService'
+import type { AvailableProject } from '@/types/project'
 import { enrollInProjectAction } from '@/actions/projectActions'
 
 function getDeadlineText(deadline: string | null) {

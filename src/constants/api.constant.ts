@@ -16,8 +16,15 @@ export const PROJECT_API = {
   submitWork: (projectId: string) => `${API_BASE}/projects/${projectId}/submit/`,
 }
 
+export const SESSION_API = {
+  next: `${API_BASE}/projects/sessions/next/`,
+  myStatus: (status?: string) =>
+    `${API_BASE}/sessions/my-status/${status ? `?status=${encodeURIComponent(status)}` : ''}`,
+}
+
 export default {
   API_BASE,
   AUTH_API,
   PROJECT_API,
+  SESSION_API,
 }

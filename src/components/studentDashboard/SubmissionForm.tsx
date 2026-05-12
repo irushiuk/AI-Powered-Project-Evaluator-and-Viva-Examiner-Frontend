@@ -72,7 +72,7 @@ export function SubmissionForm({ projectId, onSuccess }: SubmissionFormProps) {
           <input
             id="report"
             type="file"
-            accept=".pdf,.doc,.docx"
+            accept=".pdf,application/pdf"
             onChange={(e) => {
               setFile(e.target.files?.[0] || null)
               setReportError('')
@@ -84,7 +84,7 @@ export function SubmissionForm({ projectId, onSuccess }: SubmissionFormProps) {
             <p className="text-sm font-medium">
               {file ? file.name : 'Click to upload or drag and drop'}
             </p>
-            <p className="text-xs text-muted-foreground">PDF or DOC files only</p>
+            <p className="text-xs text-muted-foreground">PDF files only</p>
           </label>
         </div>
         {reportError && <p className="text-sm text-destructive">{reportError}</p>}

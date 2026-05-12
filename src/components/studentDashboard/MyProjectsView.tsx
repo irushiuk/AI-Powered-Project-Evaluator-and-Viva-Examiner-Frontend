@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
-import type { EnrolledProject } from '@/services/projectService'
+import type { EnrolledProject } from '@/types/project'
 
 function getSubmissionBadge(project: EnrolledProject) {
   if (project.submission_status === 'submitted') {
@@ -154,7 +154,7 @@ export function MyProjectsView({ initialProjects = [] }: { initialProjects?: Enr
                       href={`/dashboard/student/projects/${project.id}`}
                     >
                       <Button
-                        className="w-full cursor-pointer"
+                        className="w-full cursor-pointer text-black hover:text-black"
                         variant="outline"
                       >
                         <FileText className="mr-2 h-4 w-4" />

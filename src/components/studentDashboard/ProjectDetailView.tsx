@@ -24,7 +24,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { SubmissionForm } from './SubmissionForm'
 import Link from 'next/link'
-import type { EnrolledProject } from '@/services/projectService'
+import type { EnrolledProject } from '@/types/project'
 
 type SubmissionDetails = {
   submitted_at: string
