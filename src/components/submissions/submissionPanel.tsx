@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import DashboardLayout from "../dashboard/DashboardLayout"
+import DashboardLayout from "../teacherDashboard/DashboardLayout"
 
 type Submission = {
   id: string

@@ -1,38 +1,38 @@
-import { Rubric } from "./rubric"
+// import { Rubric } from "./rubric"
 
-export type VivaStatus =
-  | "Enrollment Open"
-  | "Enrollment Closed"
-  | "Scheduled"
-  | "Completed"
-
-
-export type EnrolledStudent = {
-  id: string
-  name: string
-  email: string
-  enrolledAt: string
-}
+// export type VivaStatus =
+//   | "Enrollment Open"
+//   | "Enrollment Closed"
+//   | "Scheduled"
+//   | "Completed"
 
 
-export type Viva = {
-  id: string
+// export type EnrolledStudent = {
+//   id: string
+//   name: string
+//   email: string
+//   enrolledAt: string
+// }
 
-  module: string
 
-  description?: string
+// export type Viva = {
+//   id: string
 
-  duration: number
+//   module: string
 
-  enrollmentDeadline: string
+//   description?: string
 
-  scheduledDate?: string
+//   duration: number
 
-  scheduledStartTime?: string
+//   enrollmentDeadline: string
 
-  status: VivaStatus
+//   scheduledDate?: string
 
-  rubrics: Rubric[]
+//   scheduledStartTime?: string
 
-  enrolledStudents: EnrolledStudent[]
-}
+//   status: VivaStatus
+
+//   rubrics: Rubric[]
+
+//   enrolledStudents: EnrolledStudent[]
+// }
