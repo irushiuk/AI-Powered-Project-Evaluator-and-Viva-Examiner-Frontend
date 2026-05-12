@@ -3,19 +3,20 @@
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import DashboardLayout from "@/components/teacherDashboard/DashboardLayout"
+import RubricsTab from "@/components/teacherDashboard/RubircsTab"
+import VivaQuestionsTab from "@/components/teacherDashboard/VivaQuestionsTab"
 import { projectService } from "@/services/projectService"
 import { Project } from "@/types/project"
 import { toast } from "sonner"
 
-// Tab keys — we'll build each tab's content as we go
 type Tab = "overview" | "rubrics" | "questions" | "sessions" | "submissions"
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
-  { key: "overview",    label: "Overview",    icon: "📋" },
-  { key: "rubrics",     label: "Rubrics",     icon: "📊" },
+  { key: "overview",    label: "Overview",       icon: "📋" },
+  { key: "rubrics",     label: "Rubrics",        icon: "📊" },
   { key: "questions",   label: "Viva Questions", icon: "❓" },
-  { key: "sessions",    label: "Sessions",    icon: "🗓️" },
-  { key: "submissions", label: "Submissions", icon: "📁" },
+  { key: "sessions",    label: "Sessions",       icon: "🗓️" },
+  { key: "submissions", label: "Submissions",    icon: "📁" },
 ]
 
 export default function ProjectDetailPage() {
@@ -125,22 +126,23 @@ export default function ProjectDetailPage() {
       {/* Tab content */}
       <div>
         {activeTab === "overview"    && <OverviewTab    project={project} />}
-        {activeTab === "rubrics"     && <ComingSoon     label="Rubrics"        description="Create rubric categories and criteria for this project." />}
-        {activeTab === "questions"   && <ComingSoon     label="Viva Questions" description="Add and manage viva questions for students." />}
-        {activeTab === "sessions"    && <ComingSoon     label="Sessions"       description="Schedule manual or automatic viva sessions." />}
-        {activeTab === "submissions" && <ComingSoon     label="Submissions"    description="View student project submissions." />}
+        {activeTab === "rubrics"     && <RubricsTab     projectId={id} />}
+        {activeTab === "questions"   && <VivaQuestionsTab projectId={id} />}
+        {activeTab === "sessions"    && <ComingSoon     label="Sessions"    description="Schedule manual or automatic viva sessions." />}
+        {activeTab === "submissions" && <ComingSoon     label="Submissions" description="View student project submissions." />}
       </div>
 
     </DashboardLayout>
   )
 }
 
-/* Overview Tab */
+/* ── Overview Tab ──────────────────────────────────────────────────────────── */
+
 function OverviewTab({ project }: { project: Project }) {
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-      <InfoCard label="Status"       value={project.status}         />
-      <InfoCard label="Type"         value={project.is_group_project ? "Group" : "Individual"} />
+      <InfoCard label="Status"        value={project.status} />
+      <InfoCard label="Type"          value={project.is_group_project ? "Group" : "Individual"} />
       <InfoCard label="Academic Year" value={project.academic_year} />
       <InfoCard
         label="Deadline"
@@ -159,7 +161,8 @@ function InfoCard({ label, value }: { label: string; value: string }) {
   )
 }
 
-/* Placeholder for tabs not yet built */
+/* ── Placeholder ─────────────────────────────────────────────────────────────*/
+
 function ComingSoon({ label, description }: { label: string; description: string }) {
   return (
     <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-14 text-center">
