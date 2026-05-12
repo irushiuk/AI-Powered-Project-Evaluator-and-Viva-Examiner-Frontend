@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import DashboardLayout from "@/components/teacherDashboard/DashboardLayout"
 import RubricsTab from "@/components/teacherDashboard/RubircsTab"
 import VivaQuestionsTab from "@/components/teacherDashboard/VivaQuestionsTab"
+import SessionsTab from "@/components/teacherDashboard/SessionsTab"
 import { projectService } from "@/services/projectService"
 import { Project } from "@/types/project"
 import { toast } from "sonner"
@@ -20,7 +21,10 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
 ]
 
 export default function ProjectDetailPage() {
-  const { id } = useParams<{ id: string }>()
+  // Fix: cast params correctly to avoid undefined id
+  const params = useParams()
+  const id = params.id as string
+
   const router = useRouter()
 
   const [project, setProject] = useState<Project | null>(null)
@@ -28,6 +32,7 @@ export default function ProjectDetailPage() {
   const [activeTab, setActiveTab] = useState<Tab>("overview")
 
   useEffect(() => {
+    if (!id) return
     const load = async () => {
       try {
         const data = await projectService.getDetail(id)
@@ -52,7 +57,7 @@ export default function ProjectDetailPage() {
     )
   }
 
-  if (!project) return null
+  if (!project || !id) return null
 
   const statusStyles: Record<string, string> = {
     draft:     "bg-yellow-50 text-yellow-600 border-yellow-200",
@@ -76,14 +81,8 @@ export default function ProjectDetailPage() {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold text-gray-900">
-                {project.project_name}
-              </h1>
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full border font-medium capitalize ${
-                  statusStyles[project.status] ?? statusStyles.draft
-                }`}
-              >
+              <h1 className="text-2xl font-bold text-gray-900">{project.project_name}</h1>
+              <span className={`text-xs px-2 py-0.5 rounded-full border font-medium capitalize ${statusStyles[project.status] ?? statusStyles.draft}`}>
                 {project.status}
               </span>
               <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-purple-50 text-purple-600 border-purple-200">
@@ -92,9 +91,7 @@ export default function ProjectDetailPage() {
             </div>
 
             {project.description && (
-              <p className="text-sm text-gray-500 mt-2 max-w-2xl">
-                {project.description}
-              </p>
+              <p className="text-sm text-gray-500 mt-2 max-w-2xl">{project.description}</p>
             )}
 
             <div className="flex flex-wrap gap-5 mt-3 text-sm text-gray-500">
@@ -125,18 +122,16 @@ export default function ProjectDetailPage() {
 
       {/* Tab content */}
       <div>
-        {activeTab === "overview"    && <OverviewTab    project={project} />}
-        {activeTab === "rubrics"     && <RubricsTab     projectId={id} />}
+        {activeTab === "overview"    && <OverviewTab project={project} />}
+        {activeTab === "rubrics"     && <RubricsTab projectId={id} />}
         {activeTab === "questions"   && <VivaQuestionsTab projectId={id} />}
-        {activeTab === "sessions"    && <ComingSoon     label="Sessions"    description="Schedule manual or automatic viva sessions." />}
-        {activeTab === "submissions" && <ComingSoon     label="Submissions" description="View student project submissions." />}
+        {activeTab === "sessions"    && <SessionsTab projectId={id} isGroupProject={project.is_group_project} />}
+        {activeTab === "submissions" && <ComingSoon label="Submissions" description="View student project submissions." />}
       </div>
 
     </DashboardLayout>
   )
 }
-
-/* ── Overview Tab ──────────────────────────────────────────────────────────── */
 
 function OverviewTab({ project }: { project: Project }) {
   return (
@@ -144,10 +139,7 @@ function OverviewTab({ project }: { project: Project }) {
       <InfoCard label="Status"        value={project.status} />
       <InfoCard label="Type"          value={project.is_group_project ? "Group" : "Individual"} />
       <InfoCard label="Academic Year" value={project.academic_year} />
-      <InfoCard
-        label="Deadline"
-        value={new Date(project.submission_deadline).toLocaleDateString()}
-      />
+      <InfoCard label="Deadline"      value={new Date(project.submission_deadline).toLocaleDateString()} />
     </div>
   )
 }
@@ -160,8 +152,6 @@ function InfoCard({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
-
-/* ── Placeholder ─────────────────────────────────────────────────────────────*/
 
 function ComingSoon({ label, description }: { label: string; description: string }) {
   return (
