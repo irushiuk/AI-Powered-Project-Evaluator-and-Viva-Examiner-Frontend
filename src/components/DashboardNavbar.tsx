@@ -20,14 +20,18 @@ export function DashboardNavbar() {
   const [profileOpen, setProfileOpen] = useState(false)
   const pathname = usePathname()
   const { logout, user } = useAuthContext()
-  const showStudentNavLinks = pathname.startsWith('/dashboard/student')
 
-  const navLinkClass = (href: string) =>
-    `rounded-full px-4 py-2 text-sm font-medium transition ${
-      pathname === href
+  const showStudentNavLinks = pathname.startsWith('/dashboard/student')
+  const showTeacherNavLinks = pathname.startsWith('/dashboard/teacher')
+
+  const navLinkClass = (href: string, exact = false) => {
+    const isActive = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/')
+    return `rounded-full px-4 py-2 text-sm font-medium transition ${
+      isActive
         ? 'bg-primary text-primary-foreground'
         : 'text-muted-foreground hover:bg-muted hover:text-foreground'
     }`
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-card">
@@ -45,21 +49,44 @@ export function DashboardNavbar() {
             <nav className="hidden items-center gap-2 md:flex">
               <Link
                 href="/dashboard/student/projects/explore"
-                className={navLinkClass('/dashboard/student/projects/explore')}
+                className={navLinkClass('/dashboard/student/projects/explore', true)}
               >
                 All Projects
               </Link>
               <Link
                 href="/dashboard/student/projects"
-                className={navLinkClass('/dashboard/student/projects')}
+                className={navLinkClass('/dashboard/student/projects', true)}
               >
                 My Projects
               </Link>
               <Link
                 href="/dashboard/student/sessions"
-                className={navLinkClass('/dashboard/student/sessions')}
+                className={navLinkClass('/dashboard/student/sessions', true)}
               >
                 My Sessions
+              </Link>
+            </nav>
+          )}
+
+          {showTeacherNavLinks && (
+            <nav className="hidden items-center gap-2 md:flex">
+              <Link
+                href="/dashboard/teacher"
+                className={navLinkClass('/dashboard/teacher', true)}
+              >
+                Dashboard
+              </Link>
+              <Link
+                href="/dashboard/teacher/projects"
+                className={navLinkClass('/dashboard/teacher/projects')}
+              >
+                Projects
+              </Link>
+              <Link
+                href="/dashboard/teacher/submissions"
+                className={navLinkClass('/dashboard/teacher/submissions', true)}
+              >
+                Submissions
               </Link>
             </nav>
           )}
