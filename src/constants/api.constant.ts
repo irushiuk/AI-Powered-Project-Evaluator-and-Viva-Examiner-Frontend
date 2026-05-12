@@ -8,7 +8,16 @@ export const AUTH_API = {
   registerStudent: `${API_BASE}/auth/student/register/`,
 }
 
+export const PROJECT_API = {
+  available: `${API_BASE}/projects/available/`,
+  myEnrollments: `${API_BASE}/projects/my-enrollments/`,
+  enroll: (projectId: string) => `${API_BASE}/projects/${projectId}/enroll/`,
+  submission: (projectId: string) => `${API_BASE}/projects/${projectId}/submission/`,
+  submitWork: (projectId: string) => `${API_BASE}/projects/${projectId}/submit/`,
+}
+
 export default {
   API_BASE,
   AUTH_API,
+  PROJECT_API,
 }

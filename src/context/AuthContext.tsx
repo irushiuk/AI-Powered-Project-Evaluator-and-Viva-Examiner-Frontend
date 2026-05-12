@@ -61,6 +61,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(STORAGE_KEYS.refreshToken, tokens.refresh)
     localStorage.setItem(STORAGE_KEYS.accessTokenExpiresAt, expiresAt)
     setCookie(COOKIE_NAMES.hasSession, "true")
+    setCookie(COOKIE_NAMES.accessToken, tokens.access)
+    setCookie(COOKIE_NAMES.refreshToken, tokens.refresh)
   }, [decodePayload])
 
   const refreshToken = useCallback(async () => {
@@ -88,6 +90,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem(STORAGE_KEYS.accessTokenExpiresAt)
     clearCookie(COOKIE_NAMES.hasSession)
     clearCookie(COOKIE_NAMES.userRole)
+    clearCookie(COOKIE_NAMES.accessToken)
+    clearCookie(COOKIE_NAMES.refreshToken)
     setUser(null)
     setAccessToken(null)
     

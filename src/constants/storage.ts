@@ -7,4 +7,6 @@ export const STORAGE_KEYS = {
 export const COOKIE_NAMES = {
   hasSession: 'has_session',
   userRole: 'user_role',
+  accessToken: 'access_token',
+  refreshToken: 'refresh_token',
 }

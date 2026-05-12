@@ -4,11 +4,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { RubricCard } from './RubricCard'
 import type { RubricCategory } from './sessionTypes'
 
+import Link from 'next/link'
+
 type SessionOngoingViewProps = {
+  sessionId: string
   rubrics?: RubricCategory[]
 }
 
-export function SessionOngoingView({ rubrics }: SessionOngoingViewProps) {
+export function SessionOngoingView({ sessionId, rubrics }: SessionOngoingViewProps) {
   return (
     <div className="space-y-6">
       <Card className="border-primary/20 bg-primary/5">
@@ -20,10 +23,12 @@ export function SessionOngoingView({ rubrics }: SessionOngoingViewProps) {
           <CardDescription>Join the session when you are ready</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Button className="w-full" size="lg">
-            Join Viva Session
-            <Play className="ml-2 h-4 w-4" />
-          </Button>
+          <Link href={`/dashboard/student/sessions/${sessionId}/live`} className="w-full block">
+            <Button className="w-full" size="lg">
+              Join Viva Session
+              <Play className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
           <p className="text-center text-xs text-muted-foreground">
             You&apos;ll be connected to the live evaluation room
           </p>
