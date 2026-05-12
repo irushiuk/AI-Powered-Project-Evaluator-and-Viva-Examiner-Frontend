@@ -1,7 +1,7 @@
-import { Calendar, Upload } from 'lucide-react'
+import { Calendar } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Countdown } from './Countdown'
-import { SubmissionForm } from './SubmissionForm'
+import { RubricCard } from './RubricCard'
 import type { StudentSession } from './sessionTypes'
 
 type SessionUpcomingViewProps = {
@@ -28,23 +28,15 @@ export function SessionUpcomingView({ session }: SessionUpcomingViewProps) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
-            Submit Your Work Now
-          </CardTitle>
-          <CardDescription>Prepare your submission before the session starts</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <SubmissionForm />
-        </CardContent>
-      </Card>
+      {/* Evaluation Rubric */}
+      {session.rubrics && session.rubrics.length > 0 && (
+        <RubricCard rubrics={session.rubrics} />
+      )}
 
       <Card>
         <CardHeader>
           <CardTitle>Preparation Checklist</CardTitle>
-          <CardDescription>Make sure you're ready before the session starts</CardDescription>
+          <CardDescription>Make sure you&apos;re ready before the session starts</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">

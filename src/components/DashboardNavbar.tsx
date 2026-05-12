@@ -44,10 +44,16 @@ export function DashboardNavbar() {
           {showStudentNavLinks && (
             <nav className="hidden items-center gap-2 md:flex">
               <Link
-                href="/dashboard/student/sessions/all"
-                className={navLinkClass('/dashboard/student/sessions/all')}
+                href="/dashboard/student/projects/explore"
+                className={navLinkClass('/dashboard/student/projects/explore')}
               >
-                All Sessions
+                All Projects
+              </Link>
+              <Link
+                href="/dashboard/student/projects"
+                className={navLinkClass('/dashboard/student/projects')}
+              >
+                My Projects
               </Link>
               <Link
                 href="/dashboard/student/sessions"

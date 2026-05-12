@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
 export default function StudentPage() {
-  redirect('/dashboard/student/sessions')
+  redirect('/dashboard/student/projects')
 }

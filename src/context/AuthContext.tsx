@@ -7,6 +7,7 @@ import * as authService from "@/services/authService"
 import { setAccessTokenGetter, setLogoutCallback } from "@/services/apiClient"
 import { STORAGE_KEYS, COOKIE_NAMES } from "@/constants/storage"
 import { getPostLoginRedirect } from "@/utils/routes"
+import { toast } from "sonner"
 
 type AuthContextType = {
   user: AuthUser | null
@@ -89,6 +90,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearCookie(COOKIE_NAMES.userRole)
     setUser(null)
     setAccessToken(null)
+    
+    toast.success("You have been logged out successfully.")
+    
     router.push('/login')
   }, [accessToken, router])
 
@@ -101,8 +105,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(data.user))
       setCookie(COOKIE_NAMES.userRole, data.user.role)
 
+      toast.success(`Welcome back, ${data.user.full_name || 'User'}!`)
+      
       // role-based redirect
       router.push(getPostLoginRedirect(data.user.role))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Login failed")
+      throw err
     } finally {
       setIsLoading(false)
     }
@@ -112,19 +121,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true)
     try {
       const data = await authService.registerStudent(payload)
+
+      // Backend returns data: null on success (no auto-login)
+      if (!data.user) {
+        toast.success(data.message || "Registration successful! Please log in.")
+        router.push('/login')
+        return
+      }
+
       setUser(data.user)
 
       if (data.access && data.refresh) {
         applyTokens({ access: data.access, refresh: data.refresh })
         localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(data.user))
         setCookie(COOKIE_NAMES.userRole, data.user.role)
+        toast.success("Account created successfully!")
         router.push(getPostLoginRedirect(data.user.role))
         return
       }
 
       localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(data.user))
       setCookie(COOKIE_NAMES.userRole, data.user.role)
+      toast.success("Account created successfully!")
       router.push('/login')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Registration failed")
+      throw err
     } finally {
       setIsLoading(false)
     }
