@@ -6,6 +6,7 @@ import DashboardLayout from "@/components/teacherDashboard/DashboardLayout"
 import RubricsTab from "@/components/teacherDashboard/RubircsTab"
 import VivaQuestionsTab from "@/components/teacherDashboard/VivaQuestionsTab"
 import SessionsTab from "@/components/teacherDashboard/SessionsTab"
+import SubmissionsTab from "@/components/teacherDashboard/SubmissionsTab"
 import { projectService } from "@/services/projectService"
 import { Project } from "@/types/project"
 import { toast } from "sonner"
@@ -126,7 +127,7 @@ export default function ProjectDetailPage() {
         {activeTab === "rubrics"     && <RubricsTab projectId={id} />}
         {activeTab === "questions"   && <VivaQuestionsTab projectId={id} />}
         {activeTab === "sessions"    && <SessionsTab projectId={id} isGroupProject={project.is_group_project} />}
-        {activeTab === "submissions" && <ComingSoon label="Submissions" description="View student project submissions." />}
+        {activeTab === "submissions" && <SubmissionsTab projectId={id} />}
       </div>
 
     </DashboardLayout>
