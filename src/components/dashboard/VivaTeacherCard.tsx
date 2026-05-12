@@ -1,131 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import CreateVivaModal from "@/components/dashboard/CreateVivaModal"
-import DashboardLayout from "@/components/dashboard/DashboardLayout"
+import { useState } from "react"
 import { Viva } from "@/types/viva"
-import { vivaService } from "@/services/vivaService"
-import { Button } from "@/components/ui/button"
 
-type CardProps = {
-  title: string
-  value: string | number
-}
-
-type GlassCardProps = {
-  children: React.ReactNode
-}
-
-export default function TeacherDashboard() {
-  const [open, setOpen] = useState(false)
-  const [editingViva, setEditingViva] = useState<Viva | null>(null)
-  const [activePage, setActivePage] = useState("dashboard")
-  const [vivas, setVivas] = useState<Viva[]>([])
-
-  const refresh = async () => {
-    const data = await vivaService.getVivas()
-    setVivas(data)
-  }
-
-  const handleCreateViva = async (data: Omit<Viva, "id">) => {
-    await vivaService.createViva(data)
-    await refresh()
-  }
-
-  const handleEditViva = async (data: Omit<Viva, "id">) => {
-    if (!editingViva) return
-    await vivaService.updateViva(editingViva.id, data)
-    await refresh()
-  }
-
-  const handleDeleteViva = async (vivaId: string) => {
-    await vivaService.deleteViva(vivaId)
-    await refresh()
-  }
-
-  useEffect(() => {
-    refresh()
-  }, [])
-
-  return (
-    <DashboardLayout >
-
-      {/* Create Modal */}
-      <CreateVivaModal
-        isOpen={open}
-        onClose={() => setOpen(false)}
-        onCreate={handleCreateViva}
-      />
-
-      {/* Edit Modal */}
-      <CreateVivaModal
-        isOpen={!!editingViva}
-        onClose={() => setEditingViva(null)}
-        onCreate={handleEditViva}
-        initialData={editingViva ?? undefined}
-      />
-
-      {/* Dashboard */}
-      {activePage === "dashboard" && (
-        <>
-          <h1 className="text-3xl font-bold mb-6">Teacher Dashboard</h1>
-
-          <div className="grid grid-cols-3 gap-6 mb-8">
-            <Card title="Total Students" value="120" />
-            <Card title="Active Vivas" value={vivas.length} />
-            <Card title="Evaluated" value="56" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-6">
-            <GlassCard>
-              <h2 className="text-xl font-semibold mb-2">Create New Viva</h2>
-              <p className="opacity-70 mb-4">Upload questions and configure AI evaluation</p>
-              <Button onClick={() => setOpen(true)}>Create</Button>
-            </GlassCard>
-
-            <GlassCard>
-              <h2 className="text-xl font-semibold mb-2">Review Submissions</h2>
-              <p className="opacity-70 mb-4">Check AI feedback & grade students</p>
-              <Button>Review</Button>
-            </GlassCard>
-          </div>
-        </>
-      )}
-
-      {/* Vivas Page */}
-      {activePage === "vivas" && (
-        <>
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold">Created Vivas</h1>
-            <Button onClick={() => setOpen(true)}>+ Create Viva</Button>
-          </div>
-
-          {vivas.length === 0 ? (
-            <div className="bg-white border rounded-2xl p-10 text-center text-gray-500">
-              No vivas created yet
-            </div>
-          ) : (
-            <div className="grid gap-4">
-              {vivas.map((viva) => (
-                <VivaTeacherCard
-                  key={viva.id}
-                  viva={viva}
-                  onEdit={() => setEditingViva(viva)}
-                  onDelete={() => handleDeleteViva(viva.id)}
-                />
-              ))}
-            </div>
-          )}
-        </>
-      )}
-
-    </DashboardLayout>
-  )
-}
-
-/* VivaTeacherCard */
-
-function VivaTeacherCard({
+export default function VivaTeacherCard({
   viva,
   onEdit,
   onDelete,
@@ -228,7 +106,7 @@ function VivaTeacherCard({
                   onClick={() => setConfirmDelete(true)}
                   className="flex items-center gap-1 text-xs bg-red-50 hover:bg-red-100 text-red-500 px-3 py-1.5 rounded-lg border border-red-100 transition"
                 >
-                   Delete
+                  Delete
                 </button>
               )}
             </div>
@@ -266,23 +144,3 @@ function VivaTeacherCard({
     </div>
   )
 }
-
-/* Shared Components */
-
-function Card({ title, value }: CardProps) {
-  return (
-    <div className="bg-white border border-gray-200 shadow-sm rounded-lg p-6">
-      <p className="opacity-70">{title}</p>
-      <h2 className="text-2xl font-bold mt-2">{value}</h2>
-    </div>
-  )
-}
-
-function GlassCard({ children }: GlassCardProps) {
-  return (
-    <div className="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
-      {children}
-    </div>
-  )
-}
-

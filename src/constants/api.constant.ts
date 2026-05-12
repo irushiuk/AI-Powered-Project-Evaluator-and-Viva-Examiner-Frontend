@@ -6,9 +6,56 @@ export const AUTH_API = {
   me: `${API_BASE}/auth/me/`,
   logout: `${API_BASE}/auth/logout/`,
   registerStudent: `${API_BASE}/auth/student/register/`,
+  registerExaminer: `${API_BASE}/auth/examiner/register/`,
 }
-
+ 
+export const PROJECTS_API = {
+  list: `${API_BASE}/projects/`,
+  create: `${API_BASE}/projects/create/`,
+  detail: (id: string) => `${API_BASE}/projects/${id}/`,
+  activate: (id: string) => `${API_BASE}/projects/${id}/activate/`,
+  examiners: (id: string) => `${API_BASE}/projects/${id}/examiners/`,
+  addExaminer: (id: string) => `${API_BASE}/projects/${id}/examiners/add/`,
+  removeExaminer: (id: string) => `${API_BASE}/projects/${id}/examiners/remove/`,
+  submissions: (id: string) => `${API_BASE}/projects/${id}/submission/`,
+  submit: (id: string) => `${API_BASE}/projects/${id}/submit/`,
+  rubrics: (id: string) => `${API_BASE}/projects/${id}/rubrics/`,
+  createRubricCategory: (id: string) => `${API_BASE}/projects/${id}/rubrics/categories/create/`,
+  updateRubricCategory: (pid: string, cid: string) => `${API_BASE}/projects/${pid}/rubrics/categories/${cid}/update/`,
+  deleteRubricCategory: (pid: string, cid: string) => `${API_BASE}/projects/${pid}/rubrics/categories/${cid}/delete/`,
+  createCriteria: (pid: string, cid: string) => `${API_BASE}/projects/${pid}/rubrics/categories/${cid}/criteria/create/`,
+  updateCriteria: (pid: string, cid: string, criId: string) => `${API_BASE}/projects/${pid}/rubrics/categories/${cid}/criteria/${criId}/update/`,
+  deleteCriteria: (pid: string, cid: string, criId: string) => `${API_BASE}/projects/${pid}/rubrics/categories/${cid}/criteria/${criId}/delete/`,
+  scheduleSessions: (id: string, mode: 'manual' | 'auto') => `${API_BASE}/projects/${id}/sessions/schedule/${mode}/`,
+  sessions: (id: string) => `${API_BASE}/projects/${id}/sessions/`,
+  mySession: (id: string) => `${API_BASE}/projects/${id}/sessions/my-session/`,
+  updateSession: (pid: string, sid: string) => `${API_BASE}/projects/${pid}/sessions/${sid}/update/`,
+  resetSessions: (id: string) => `${API_BASE}/projects/${id}/sessions/reset/`,
+  openPanel: (id: string) => `${API_BASE}/projects/${id}/session-panel/open/`,
+  activePanel: (id: string) => `${API_BASE}/projects/${id}/session-panel/active/`,
+  vivaQuestions: (id: string) => `${API_BASE}/projects/${id}/viva/questions/`,
+  createVivaQuestion: (id: string) => `${API_BASE}/projects/${id}/viva/questions/create/`,
+  updateVivaQuestion: (pid: string, qid: string) => `${API_BASE}/projects/${pid}/viva/questions/${qid}/update/`,
+  deleteVivaQuestion: (pid: string, qid: string) => `${API_BASE}/projects/${pid}/viva/questions/${qid}/delete/`,
+}
+ 
+export const SESSIONS_API = {
+  startDemo: (id: string) => `${API_BASE}/sessions/${id}/start-demo/`,
+  completeDemo: (id: string) => `${API_BASE}/sessions/${id}/complete-demo/`,
+  endViva: (id: string) => `${API_BASE}/sessions/${id}/end-viva/`,
+  myStatus: `${API_BASE}/sessions/my-status/`,
+}
+ 
+export const STUDENT_API = {
+  availableProjects: `${API_BASE}/projects/available/`,
+  enroll: (id: string) => `${API_BASE}/projects/${id}/enroll/`,
+  myEnrollments: `${API_BASE}/projects/my-enrollments/`,
+}
+ 
 export default {
   API_BASE,
   AUTH_API,
+  PROJECTS_API,
+  SESSIONS_API,
+  STUDENT_API,
 }

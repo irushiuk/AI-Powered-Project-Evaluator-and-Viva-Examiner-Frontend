@@ -1,73 +1,46 @@
 "use client"
 
-import { ReactNode, useState } from "react"
+import { useRouter, usePathname } from "next/navigation"
+import { ReactNode } from "react"
 
 type Props = {
   children: ReactNode
-  activePage?: string
-  setActivePage?: (page: string) => void
 }
 
-export default function DashboardLayout({
-  children,
-  activePage,
-  setActivePage
-}: Props) {
+const navItems = [
+  { key: "dashboard", label: "Dashboard", href: "/dashboard/teacher" },
+  { key: "projects", label: "Projects", href: "/dashboard/teacher/projects" },
+  { key: "submissions", label: "Submissions", href: "/dashboard/teacher/submissions" },
+]
 
-  const [internalActivePage, setInternalActivePage] = useState("dashboard")
-
-  const currentActivePage = activePage ?? internalActivePage
-  const handleSetActivePage = setActivePage ?? setInternalActivePage
+export default function DashboardLayout({ children }: Props) {
+  const router = useRouter()
+  const pathname = usePathname()
 
   return (
     <div className="flex flex-1">
-
-      {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-gray-200 p-5 lg:p-6">
-
-        <h1 className="text-2xl font-bold mb-8">
-          AI Viva
-        </h1>
-
+        <h1 className="text-2xl font-bold mb-8">AI Viva</h1>
         <nav className="space-y-2 text-sm">
-
-          <button
-            onClick={() => handleSetActivePage("dashboard")}
-            className={`w-full text-left p-3 rounded-xl transition ${
-              currentActivePage === "dashboard"
-                ? "bg-blue-100 text-blue-700"
-                : "hover:bg-gray-100 text-gray-600"
-            }`}
-          >
-            Dashboard
-          </button>
-
-          <button
-            onClick={() => handleSetActivePage("vivas")}
-            className={`w-full text-left p-3 rounded-xl transition ${
-              currentActivePage === "vivas"
-                ? "bg-blue-100 text-blue-700"
-                : "hover:bg-gray-100 text-gray-600"
-            }`}
-          >
-            Vivas
-          </button>
-
-          <button
-            className="w-full text-left p-3 rounded-xl hover:bg-gray-100 text-gray-600"
-          >
-            Analytics
-          </button>
-
+          {navItems.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => router.push(item.href)}
+              className={`w-full text-left p-3 rounded-xl transition ${
+                pathname === item.href
+                  ? "bg-blue-50 text-blue-700 font-semibold"
+                  : "hover:bg-gray-100 text-gray-700"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </nav>
-
       </aside>
 
-      {/* Main */}
       <main className="flex-1 p-4 sm:p-5 lg:p-6">
         {children}
       </main>
-
     </div>
   )
 }
