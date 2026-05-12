@@ -39,7 +39,7 @@ export default function ProjectsPage() {
   const doneCount   = projects.filter((p) => p.status === "completed").length
 
   return (
-    <DashboardLayout>
+    <div>
       <CreateProjectModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -51,7 +51,7 @@ export default function ProjectsPage() {
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Projects</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Manage your evaluation projects
+            Manage your projects
           </p>
         </div>
         <Button onClick={() => setModalOpen(true)}>+ New Project</Button>
@@ -59,8 +59,8 @@ export default function ProjectsPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-4 mb-8">
-        <SummaryCard label="Draft"     value={draftCount}  color="yellow" />
-        <SummaryCard label="Active"    value={activeCount} color="green"  />
+        <SummaryCard label="Draft"     value={draftCount}  color="blue" />
+        <SummaryCard label="Active"    value={activeCount} color="blue"  />
         <SummaryCard label="Completed" value={doneCount}   color="blue"   />
       </div>
 
@@ -79,7 +79,7 @@ export default function ProjectsPage() {
           <Button onClick={() => setModalOpen(true)}>+ New Project</Button>
         </div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
           {projects.map((project) => (
             <ProjectCard
               key={project.id}
@@ -89,7 +89,7 @@ export default function ProjectsPage() {
           ))}
         </div>
       )}
-    </DashboardLayout>
+    </div>
   )
 }
 

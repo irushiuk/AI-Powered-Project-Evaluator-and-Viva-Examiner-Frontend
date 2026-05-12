@@ -1,32 +1,43 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import Link from "next/link"
+import {
+  Calendar,
+  Users,
+  UserCircle,
+  ArrowRight,
+} from "lucide-react"
+
 import { Project } from "@/types/project"
 import { projectService } from "@/services/projectService"
 import { toast } from "sonner"
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 
 type Props = {
   project: Project
   onActivated: () => void
 }
 
-export default function ProjectCard({ project, onActivated }: Props) {
-  const router = useRouter()
+export default function ProjectCard({
+  project,
+  onActivated,
+}: Props) {
   const [activating, setActivating] = useState(false)
-
-  const statusStyles: Record<string, { bar: string; badge: string }> = {
-    draft:     { bar: "bg-yellow-400", badge: "bg-yellow-50 text-yellow-600 border-yellow-200" },
-    active:    { bar: "bg-green-400",  badge: "bg-green-50 text-green-600 border-green-200"   },
-    completed: { bar: "bg-blue-400",   badge: "bg-blue-50 text-blue-600 border-blue-200"      },
-  }
-  const style = statusStyles[project.status] ?? statusStyles.draft
 
   const handleActivate = async () => {
     setActivating(true)
+
     try {
       await projectService.activate(project.id)
-      toast.success(`${project.project_name} is now active`)
+
+      toast.success(
+        `${project.project_name} is now active`
+      )
+
       onActivated()
     } catch {
       toast.error("Failed to activate project")
@@ -36,64 +47,123 @@ export default function ProjectCard({ project, onActivated }: Props) {
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+    <Card className="rounded-2xl border hover:shadow-md transition-all duration-300 h-full">
 
-      {/* Status colour strip */}
-      <div className={`h-1 w-full ${style.bar}`} />
+      <CardHeader className="space-y-4">
+        {/* Title + badges */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-2">
+            <CardTitle className="text-xl leading-snug line-clamp-2">
+              {project.project_name}
+            </CardTitle>
 
-      <div className="p-6">
-        <div className="flex items-start justify-between gap-4">
-
-          {/* Left: info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-lg font-semibold text-gray-900 truncate">
-                {project.project_name}
-              </h2>
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full border font-medium capitalize ${style.badge}`}
+            <div className="flex flex-wrap gap-2">
+              <Badge
+                variant="outline"
+                className="capitalize bg-blue-50 text-blue-700 border-blue-200"
               >
                 {project.status}
-              </span>
-              <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-purple-50 text-purple-600 border-purple-200">
-                {project.is_group_project ? "👥 Group" : "👤 Individual"}
-              </span>
-            </div>
+              </Badge>
 
-            {project.description && (
-              <p className="text-sm text-gray-500 mt-1.5 line-clamp-2">
-                {project.description}
-              </p>
-            )}
-
-            <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-500">
-              <span>📅 Deadline: {new Date(project.submission_deadline).toLocaleDateString()}</span>
-              <span>🎓 {project.academic_year}</span>
-            </div>
-          </div>
-
-          {/* Right: actions */}
-          <div className="flex flex-col items-end gap-2 shrink-0">
-            {project.status === "draft" && (
-              <button
-                onClick={handleActivate}
-                disabled={activating}
-                className="text-xs bg-green-500 hover:bg-green-600 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg transition font-medium"
+              <Badge
+                variant="outline"
+                className="bg-blue-50 text-blue-700 border-blue-200"
               >
-                {activating ? "Activating..." : "✅ Activate"}
-              </button>
-            )}
-
-            <button
-              onClick={() => router.push(`/dashboard/teacher/projects/${project.id}`)}
-              className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-100 px-3 py-1.5 rounded-lg transition font-medium"
-            >
-              Open →
-            </button>
+                {project.is_group_project
+                  ? "👥 Group"
+                  : "👤 Individual"}
+              </Badge>
+            </div>
           </div>
-
         </div>
-      </div>
-    </div>
+
+        {/* Description */}
+        <p className="text-sm text-muted-foreground line-clamp-3">
+          {project.description ||
+            "No description available"}
+        </p>
+      </CardHeader>
+
+      <CardContent className="space-y-5">
+
+        {/* Project Type */}
+        <div className="flex items-center gap-3">
+          {project.is_group_project ? (
+            <Users className="h-5 w-5 text-muted-foreground" />
+          ) : (
+            <UserCircle className="h-5 w-5 text-muted-foreground" />
+          )}
+
+          <div>
+            <p className="text-sm font-medium">
+              Project Type
+            </p>
+
+            <p className="text-sm text-muted-foreground">
+              {project.is_group_project
+                ? "Group Project"
+                : "Individual Project"}
+            </p>
+          </div>
+        </div>
+
+        {/* Deadline */}
+        <div className="flex items-center gap-3">
+          <Calendar className="h-5 w-5 text-muted-foreground" />
+
+          <div>
+            <p className="text-sm font-medium">
+              Deadline
+            </p>
+
+            <p className="text-sm text-muted-foreground">
+              {project.submission_deadline
+                ? new Date(
+                    project.submission_deadline
+                  ).toLocaleDateString()
+                : "No deadline"}
+            </p>
+          </div>
+        </div>
+
+        {/* Academic year */}
+        <div>
+          <p className="text-sm font-medium">
+            Academic Year
+          </p>
+
+          <p className="text-sm text-muted-foreground">
+            {project.academic_year || "N/A"}
+          </p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between pt-3">
+
+          {project.status === "draft" ? (
+            <Button
+              onClick={handleActivate}
+              disabled={activating}
+              size="sm"
+            >
+              {activating
+                ? "Activating..."
+                : "Activate"}
+            </Button>
+          ) : (
+            <div />
+          )}
+
+          <Link
+            href={`/dashboard/teacher/projects/${project.id}`}
+          >
+            <Button variant="outline" size="sm">
+              Open
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

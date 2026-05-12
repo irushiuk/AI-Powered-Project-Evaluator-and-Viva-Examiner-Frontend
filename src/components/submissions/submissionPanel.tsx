@@ -54,7 +54,6 @@ export default function SubmissionsPanel() {
   }, [selectedProject])
 
   return (
-    <DashboardLayout>
       <div className="flex flex-col lg:flex-row gap-6 h-full">
 
         {/* LEFT: project list */}
@@ -126,7 +125,6 @@ export default function SubmissionsPanel() {
         </section>
 
       </div>
-    </DashboardLayout>
   )
 }
 

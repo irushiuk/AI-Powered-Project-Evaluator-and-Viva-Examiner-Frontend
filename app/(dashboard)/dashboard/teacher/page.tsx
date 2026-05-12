@@ -21,7 +21,7 @@ export default function TeacherDashboard() {
   const completedCount = projects.filter((p) => p.status === "completed").length
 
   return (
-    <DashboardLayout>
+    <div>
       <h1 className="text-3xl font-bold mb-6">Teacher Dashboard</h1>
 
       <div className="grid grid-cols-3 gap-6 mb-8">
@@ -47,7 +47,7 @@ export default function TeacherDashboard() {
           </Button>
         </GlassCard>
       </div>
-    </DashboardLayout>
+    </div>
   )
 }
 

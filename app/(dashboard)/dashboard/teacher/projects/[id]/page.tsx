@@ -13,12 +13,12 @@ import { toast } from "sonner"
 
 type Tab = "overview" | "rubrics" | "questions" | "sessions" | "submissions"
 
-const TABS: { key: Tab; label: string; icon: string }[] = [
-  { key: "overview",    label: "Overview",       icon: "📋" },
-  { key: "rubrics",     label: "Rubrics",        icon: "📊" },
-  { key: "questions",   label: "Viva Questions", icon: "❓" },
-  { key: "sessions",    label: "Sessions",       icon: "🗓️" },
-  { key: "submissions", label: "Submissions",    icon: "📁" },
+const TABS: { key: Tab; label: string}[] = [
+  { key: "overview",    label: "Overview"},
+  { key: "rubrics",     label: "Rubrics"},
+  { key: "questions",   label: "Viva Questions"},
+  { key: "sessions",    label: "Sessions"},
+  { key: "submissions", label: "Submissions"},
 ]
 
 export default function ProjectDetailPage() {
@@ -50,25 +50,22 @@ export default function ProjectDetailPage() {
 
   if (loading) {
     return (
-      <DashboardLayout>
         <div className="flex items-center justify-center py-20 text-gray-400 text-sm">
           Loading project...
         </div>
-      </DashboardLayout>
     )
   }
 
   if (!project || !id) return null
 
   const statusStyles: Record<string, string> = {
-    draft:     "bg-yellow-50 text-yellow-600 border-yellow-200",
-    active:    "bg-green-50  text-green-600  border-green-200",
+    draft:     "bg-blue-50 text-blue-600 border-blue-200",
+    active:    "bg-blue-50  text-blue-600  border-blue-200",
     completed: "bg-blue-50   text-blue-600   border-blue-200",
   }
 
   return (
-    <DashboardLayout>
-
+        <div>
       {/* Back button */}
       <button
         onClick={() => router.push("/dashboard/teacher/projects")}
@@ -98,7 +95,7 @@ export default function ProjectDetailPage() {
             <div className="flex flex-wrap gap-5 mt-3 text-sm text-gray-500">
               <span>📅 Deadline: {new Date(project.submission_deadline).toLocaleString()}</span>
               <span>🎓 {project.academic_year}</span>
-              <span>🆔 <span className="font-mono text-xs">{project.id}</span></span>
+              {/* <span>🆔 <span className="font-mono text-xs">{project.id}</span></span> */}
             </div>
           </div>
         </div>
@@ -116,7 +113,7 @@ export default function ProjectDetailPage() {
                 : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
-            {tab.icon} {tab.label}
+             {tab.label}
           </button>
         ))}
       </div>
@@ -130,7 +127,8 @@ export default function ProjectDetailPage() {
         {activeTab === "submissions" && <SubmissionsTab projectId={id} />}
       </div>
 
-    </DashboardLayout>
+      </div>
+
   )
 }
 
