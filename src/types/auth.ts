@@ -24,6 +24,17 @@ export type RegisterStudentRequest = {
   batch: string
 }
 
+
+export type RegisterExaminerRequest = {
+  full_name: string
+  email: string
+  password: string
+  confirm_password: string
+  employee_id: string
+  department: string
+  designation: string
+}
+
 export type RegisterResponse = {
   user: AuthUser
   access?: string
