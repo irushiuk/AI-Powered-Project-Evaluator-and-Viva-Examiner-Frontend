@@ -175,7 +175,7 @@ export default function RubricsTab({ projectId }: Props) {
               const width = Math.min(Number(cat.weight_percentage), 100)
               return (
                 <div
-                  key={cat.id}
+                  key={cat.category_id}
                   title={`${cat.category_name}: ${cat.weight_percentage}%`}
                   style={{ width: `${width}%`, transition: "width 0.4s ease" }}
                   className={`${color} first:rounded-l-full last:rounded-r-full`}
@@ -191,7 +191,7 @@ export default function RubricsTab({ projectId }: Props) {
                 "bg-sky-500", "bg-cyan-500", "bg-teal-500",
               ]
               return (
-                <div key={cat.id} className="flex items-center gap-1.5">
+                <div key={cat.category_id} className="flex items-center gap-1.5">
                   <span className={`w-2.5 h-2.5 rounded-sm ${colors[idx % colors.length]}`} />
                   <span className="text-xs text-gray-600">
                     {cat.category_name}{" "}
@@ -228,7 +228,7 @@ export default function RubricsTab({ projectId }: Props) {
       {/* ── Category cards ────────────────────────────────────────────────── */}
       <div className="space-y-3">
         {categories.map((cat, idx) => {
-          const isOpen = expandedIds.has(cat.id)
+          const isOpen = expandedIds.has(cat.category_id)
           const catColors = [
             { ring: "ring-blue-200", bg: "bg-blue-500", light: "bg-blue-50", text: "text-blue-700" },
             { ring: "ring-indigo-200", bg: "bg-indigo-500", light: "bg-indigo-50", text: "text-indigo-700" },
@@ -241,7 +241,7 @@ export default function RubricsTab({ projectId }: Props) {
 
           return (
             <div
-              key={cat.id}
+              key={cat.category_id}
               className={`bg-white border border-gray-200 rounded-2xl overflow-hidden transition-shadow ${isOpen ? "shadow-md" : "shadow-sm hover:shadow-md"}`}
             >
               {/* Category header row */}
@@ -274,8 +274,8 @@ export default function RubricsTab({ projectId }: Props) {
                   {/* Add criteria */}
                   <button
                     onClick={() => {
-                      setCriteriaModal({ open: true, categoryId: cat.id, editing: null })
-                      if (!isOpen) toggleExpand(cat.id)
+                      setCriteriaModal({ open: true, categoryId: cat.category_id, editing: null })
+                      if (!isOpen) toggleExpand(cat.category_id)
                     }}
                     title="Add criteria"
                     className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg transition font-medium"
@@ -303,7 +303,7 @@ export default function RubricsTab({ projectId }: Props) {
                       setDeleteConfirm({
                         open: true,
                         type: "category",
-                        categoryId: cat.id,
+                        categoryId: cat.category_id,
                         name: cat.category_name,
                       })
                     }
@@ -317,7 +317,7 @@ export default function RubricsTab({ projectId }: Props) {
 
                   {/* Expand toggle */}
                   <button
-                    onClick={() => toggleExpand(cat.id)}
+                    onClick={() => toggleExpand(cat.category_id)}
                     className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition"
                   >
                     <svg
@@ -338,7 +338,7 @@ export default function RubricsTab({ projectId }: Props) {
                       <p className="text-sm text-gray-400">No criteria yet.</p>
                       <button
                         onClick={() =>
-                          setCriteriaModal({ open: true, categoryId: cat.id, editing: null })
+                          setCriteriaModal({ open: true, categoryId: cat.category_id, editing: null })
                         }
                         className="text-sm text-blue-500 hover:text-blue-700 font-medium mt-1 transition"
                       >
@@ -348,12 +348,12 @@ export default function RubricsTab({ projectId }: Props) {
                   ) : (
                     cat.criteria.map((cr) => (
                       <CriteriaRow
-                        key={cr.id}
+                        key={cr.criteria_id}
                         criteria={cr}
                         onEdit={() =>
                           setCriteriaModal({
                             open: true,
-                            categoryId: cat.id,
+                            categoryId: cat.category_id,
                             editing: cr,
                           })
                         }
@@ -361,8 +361,8 @@ export default function RubricsTab({ projectId }: Props) {
                           setDeleteConfirm({
                             open: true,
                             type: "criteria",
-                            categoryId: cat.id,
-                            criteriaId: cr.id,
+                            categoryId: cat.category_id,
+                            criteriaId: cr.criteria_id,
                             name: cr.criteria_name,
                           })
                         }
@@ -384,7 +384,7 @@ export default function RubricsTab({ projectId }: Props) {
           onClose={() => setCategoryModal({ open: false, editing: null })}
           onSave={async (payload) => {
             if (categoryModal.editing) {
-              await rubricService.updateCategory(projectId, categoryModal.editing.id, payload as UpdateCategoryPayload)
+              await rubricService.updateCategory(projectId, categoryModal.editing.category_id, payload as UpdateCategoryPayload)
               toast.success("Category updated")
             } else {
               await rubricService.createCategory(projectId, payload as CreateCategoryPayload)
@@ -405,7 +405,7 @@ export default function RubricsTab({ projectId }: Props) {
               await rubricService.updateCriteria(
                 projectId,
                 criteriaModal.categoryId,
-                criteriaModal.editing.id,
+                criteriaModal.editing.criteria_id,
                 payload,
               )
               toast.success("Criterion updated")

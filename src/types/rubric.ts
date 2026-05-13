@@ -1,6 +1,5 @@
-// Rubric Category
 export type RubricCriteria = {
-  id: string
+  criteria_id: string
   criteria_name: string
   max_score: number
   weight_in_category: number
@@ -8,7 +7,7 @@ export type RubricCriteria = {
 }
 
 export type RubricCategory = {
-  id: string
+  category_id: string          // ← was "id", backend returns "category_id"
   category_name: string
   weight_percentage: number
   description?: string
