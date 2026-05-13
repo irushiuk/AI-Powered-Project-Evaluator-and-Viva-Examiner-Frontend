@@ -14,7 +14,7 @@ import { toast } from "sonner"
 type Tab = "overview" | "rubrics" | "questions" | "sessions" | "submissions"
 
 const TABS: { key: Tab; label: string}[] = [
-  { key: "overview",    label: "Overview"},
+  // { key: "overview",    label: "Overview"},
   { key: "rubrics",     label: "Rubrics"},
   { key: "questions",   label: "Viva Questions"},
   { key: "sessions",    label: "Sessions"},
@@ -30,7 +30,7 @@ export default function ProjectDetailPage() {
 
   const [project, setProject] = useState<Project | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<Tab>("overview")
+  const [activeTab, setActiveTab] = useState<Tab>("rubrics")
 
   useEffect(() => {
     if (!id) return
@@ -120,7 +120,7 @@ export default function ProjectDetailPage() {
 
       {/* Tab content */}
       <div>
-        {activeTab === "overview"    && <OverviewTab project={project} />}
+        {/* {activeTab === "overview"    && <OverviewTab project={project} />} */}
         {activeTab === "rubrics"     && <RubricsTab projectId={id} />}
         {activeTab === "questions"   && <VivaQuestionsTab projectId={id} />}
         {activeTab === "sessions"    && <SessionsTab projectId={id} isGroupProject={project.is_group_project} />}
