@@ -45,6 +45,17 @@ export const SESSIONS_API = {
   endViva: (id: string) => `${API_BASE}/sessions/${id}/end-viva/`,
   myStatus: `${API_BASE}/sessions/my-status/`,
 }
+
+export const VIVA_API = {
+  startSession: `${API_BASE}/viva/sessions/start/`,
+  submitAnswer: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/answer/`,
+  sessionStatus: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/status/`,
+  sessionReport: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/report/`,
+}
+
+export const CODE_ANALYSIS_API = {
+  sonarSummary: (codeSubmissionId: string) => `${API_BASE}/code-analysis/submissions/${codeSubmissionId}/sonar-summary/`,
+}
  
 export const STUDENT_API = {
   availableProjects: `${API_BASE}/projects/available/`,
@@ -73,6 +84,8 @@ export default {
   PROJECT_API,
   SESSION_API,
   PROJECTS_API,
+  CODE_ANALYSIS_API,
   SESSIONS_API,
+  VIVA_API,
   STUDENT_API,
 }

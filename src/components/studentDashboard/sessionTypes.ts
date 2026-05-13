@@ -37,6 +37,7 @@ export type SessionResults = {
   submission: {
     repo: string
     report: string
+    reportUrl?: string | null
   }
   codeAnalysis: CodeAnalysis
   aiEvaluation: AiEvaluationItem[]
