@@ -32,6 +32,21 @@ export function SessionUpcomingView({ session }: SessionUpcomingViewProps) {
       {session.rubrics && session.rubrics.length > 0 && (
         <RubricCard rubrics={session.rubrics} />
       )}
+      {(!session.rubrics || session.rubrics.length === 0) && (
+        <Card className="border-dashed">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Evaluation Rubric
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              The evaluation rubric will be available soon. Please check back closer to the session date.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

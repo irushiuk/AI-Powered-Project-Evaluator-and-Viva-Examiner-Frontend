@@ -4,12 +4,10 @@ import { useMemo, useState } from 'react'
 import {
   Search,
   Calendar,
-  Clock,
   User,
   Users,
   UserCircle,
   CheckCircle2,
-  GraduationCap,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -40,72 +38,9 @@ import {
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 
-// ── Types matching backend AvailableProjectSerializer ─────────────────────
-type AvailableProject = {
-  id: string
-  project_name: string
-  description: string | null
-  is_group_project: boolean
-  submission_deadline: string | null
-  lead_examiner_name: string | null
-  enrolled: boolean
-}
-
-type ProjectFilter = 'all' | 'open' | 'enrolled'
-
-// ── Mock data (matches GET /api/projects/available/) ──────────────────────
-const INITIAL_PROJECTS: AvailableProject[] = [
-  {
-    id: '101',
-    project_name: 'AI-Powered Student Performance Tracker',
-    description:
-      'Build an intelligent analytics platform that tracks student performance using machine learning.',
-    is_group_project: false,
-    submission_deadline: '2026-06-01T23:59:00Z',
-    lead_examiner_name: 'Dr. Kavisha Perera',
-    enrolled: false,
-  },
-  {
-    id: '102',
-    project_name: 'Smart Waste Management System',
-    description:
-      'Design an IoT-based smart waste management system with route optimization.',
-    is_group_project: true,
-    submission_deadline: '2026-06-10T23:59:00Z',
-    lead_examiner_name: 'Prof. Nishan Fernando',
-    enrolled: false,
-  },
-  {
-    id: '103',
-    project_name: 'Wireless Energy Monitoring Dashboard',
-    description:
-      'Create a real-time energy consumption dashboard with wireless sensor integration.',
-    is_group_project: false,
-    submission_deadline: '2026-06-15T23:59:00Z',
-    lead_examiner_name: 'Dr. Heshani Silva',
-    enrolled: false,
-  },
-  {
-    id: '104',
-    project_name: 'Autonomous Marine Navigation Simulator',
-    description:
-      'Develop a simulation platform for autonomous marine vessel navigation.',
-    is_group_project: true,
-    submission_deadline: '2026-06-20T23:59:00Z',
-    lead_examiner_name: 'Eng. Malika Jayasinghe',
-    enrolled: false,
-  },
-  {
-    id: '105',
-    project_name: 'Industrial Robot Arm Control Platform',
-    description:
-      'Build a control interface for industrial robot arm operations with real-time feedback.',
-    is_group_project: true,
-    submission_deadline: null,
-    lead_examiner_name: 'Dr. Sameera Wickramasinghe',
-    enrolled: true,
-  },
-]
+import { toast } from 'sonner'
+import type { AvailableProject } from '@/types/project'
+import { enrollInProjectAction } from '@/actions/projectActions'
 
 function getDeadlineText(deadline: string | null) {
   if (!deadline) return 'No deadline'
@@ -125,13 +60,16 @@ function getDeadlineText(deadline: string | null) {
   return formatted
 }
 
-export function ExploreProjectsView() {
-  const [projects, setProjects] = useState(INITIAL_PROJECTS)
+type ProjectFilter = 'all' | 'open' | 'enrolled'
+
+export function ExploreProjectsView({ initialProjects = [] }: { initialProjects?: AvailableProject[] }) {
+  const [projects, setProjects] = useState<AvailableProject[]>(initialProjects)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<ProjectFilter>('all')
   const [pendingProject, setPendingProject] =
     useState<AvailableProject | null>(null)
   const [groupNumber, setGroupNumber] = useState('')
+  const [isEnrolling, setIsEnrolling] = useState(false)
 
   const filteredProjects = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -158,18 +96,36 @@ export function ExploreProjectsView() {
     setGroupNumber('')
   }
 
-  const confirmEnroll = () => {
+  const confirmEnroll = async () => {
     if (!pendingProject) return
     if (pendingProject.is_group_project && !groupNumber.trim()) return
 
-    // TODO: call POST /api/projects/<id>/enroll/ with { group_number }
-    setProjects((current) =>
-      current.map((p) =>
-        p.id === pendingProject.id ? { ...p, enrolled: true } : p,
-      ),
-    )
-    setPendingProject(null)
-    setGroupNumber('')
+    setIsEnrolling(true)
+    try {
+      const result = await enrollInProjectAction(
+        pendingProject.id,
+        pendingProject.is_group_project ? groupNumber.trim() : undefined
+      )
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+
+      toast.success('Successfully enrolled in project!')
+      
+      // Update local state to reflect enrollment
+      setProjects((current) =>
+        current.map((p) =>
+          p.id === pendingProject.id ? { ...p, enrolled: true } : p,
+        ),
+      )
+      setPendingProject(null)
+      setGroupNumber('')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to enroll')
+    } finally {
+      setIsEnrolling(false)
+    }
   }
 
   return (
@@ -337,10 +293,10 @@ export function ExploreProjectsView() {
             <AlertDialogAction
               onClick={confirmEnroll}
               disabled={
-                pendingProject?.is_group_project && !groupNumber.trim()
+                isEnrolling || (pendingProject?.is_group_project && !groupNumber.trim())
               }
             >
-              Confirm
+              {isEnrolling ? 'Enrolling...' : 'Confirm'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -6,10 +6,16 @@ import { Send, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { toast } from 'sonner'
+import { submitProjectWorkAction } from '@/actions/projectActions'
 
-export function SubmissionForm() {
+interface SubmissionFormProps {
+  projectId: string
+  onSuccess: () => void
+}
+
+export function SubmissionForm({ projectId, onSuccess }: SubmissionFormProps) {
   const [repoUrl, setRepoUrl] = useState('')
-  const [reportUrl, setReportUrl] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [reportError, setReportError] = useState('')
@@ -17,18 +23,34 @@ export function SubmissionForm() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
 
-    if (!reportUrl && !file) {
-      setReportError('Add a report link or upload a report file.')
+    if (!file) {
+      setReportError('Please upload a report file (PDF).')
       return
     }
 
     setIsSubmitting(true)
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    setIsSubmitting(false)
-    setRepoUrl('')
-    setReportUrl('')
-    setFile(null)
-    setReportError('')
+    try {
+      const formData = new FormData()
+      formData.append('github_repo_url', repoUrl)
+      if (file) {
+        formData.append('report_file', file)
+      }
+
+      const result = await submitProjectWorkAction(projectId, formData)
+      if (!result.ok) {
+        toast.error(result.error)
+        setReportError(result.error)
+        return
+      }
+
+      toast.success('Project work submitted successfully!')
+      onSuccess()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to submit work')
+      setReportError(error instanceof Error ? error.message : 'Upload failed')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -45,29 +67,12 @@ export function SubmissionForm() {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="report-link">Project Report Link</Label>
-        <Input
-          id="report-link"
-          type="url"
-          placeholder="https://drive.google.com/your-report"
-          value={reportUrl}
-          onChange={(e) => {
-            setReportUrl(e.target.value)
-            setReportError('')
-          }}
-        />
-        <p className="text-xs text-muted-foreground">
-          Add a shareable report link, or upload a file below.
-        </p>
-      </div>
-
-      <div className="space-y-2">
         <Label htmlFor="report">Upload Project Report</Label>
         <div className="cursor-pointer rounded-lg border-2 border-dashed border-border p-6 text-center transition hover:bg-secondary/50">
           <input
             id="report"
             type="file"
-            accept=".pdf,.doc,.docx"
+            accept=".pdf,application/pdf"
             onChange={(e) => {
               setFile(e.target.files?.[0] || null)
               setReportError('')
@@ -79,7 +84,7 @@ export function SubmissionForm() {
             <p className="text-sm font-medium">
               {file ? file.name : 'Click to upload or drag and drop'}
             </p>
-            <p className="text-xs text-muted-foreground">PDF or DOC files only</p>
+            <p className="text-xs text-muted-foreground">PDF files only</p>
           </label>
         </div>
         {reportError && <p className="text-sm text-destructive">{reportError}</p>}

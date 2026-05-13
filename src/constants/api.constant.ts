@@ -45,17 +45,47 @@ export const SESSIONS_API = {
   endViva: (id: string) => `${API_BASE}/sessions/${id}/end-viva/`,
   myStatus: `${API_BASE}/sessions/my-status/`,
 }
+
+export const VIVA_API = {
+  startSession: `${API_BASE}/viva/sessions/start/`,
+  submitAnswer: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/answer/`,
+  sessionStatus: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/status/`,
+  sessionReport: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/report/`,
+}
+
+export const CODE_ANALYSIS_API = {
+  sonarSummary: (codeSubmissionId: string) => `${API_BASE}/code-analysis/submissions/${codeSubmissionId}/sonar-summary/`,
+}
  
 export const STUDENT_API = {
   availableProjects: `${API_BASE}/projects/available/`,
   enroll: (id: string) => `${API_BASE}/projects/${id}/enroll/`,
   myEnrollments: `${API_BASE}/projects/my-enrollments/`,
 }
+
+export const PROJECT_API = {
+  available: `${API_BASE}/projects/available/`,
+  myEnrollments: `${API_BASE}/projects/my-enrollments/`,
+  enroll: (projectId: string) => `${API_BASE}/projects/${projectId}/enroll/`,
+  submission: (projectId: string) => `${API_BASE}/projects/${projectId}/submission/`,
+  submitWork: (projectId: string) => `${API_BASE}/projects/${projectId}/submit/`,
+}
+
+export const SESSION_API = {
+  next: `${API_BASE}/projects/sessions/next/`,
+  myStatus: (status?: string) =>
+    `${API_BASE}/sessions/my-status/${status ? `?status=${encodeURIComponent(status)}` : ''}`,
+  mySession: (projectId: string) => `${API_BASE}/projects/${projectId}/sessions/my-session/`,
+}
  
 export default {
   API_BASE,
   AUTH_API,
+  PROJECT_API,
+  SESSION_API,
   PROJECTS_API,
+  CODE_ANALYSIS_API,
   SESSIONS_API,
+  VIVA_API,
   STUDENT_API,
 }

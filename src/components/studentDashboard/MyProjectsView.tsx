@@ -21,92 +21,7 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
-// ── Types matching backend MyEnrollmentSerializer ─────────────────────────
-type SessionDetails = {
-  session_id: string
-  scheduled_start: string
-  scheduled_end: string
-  location_room: string
-  status: 'scheduled' | 'in_progress' | 'completed'
-}
-
-type GroupInfo = {
-  group_id: string
-  group_name: string
-  members: string[]
-}
-
-type EnrolledProject = {
-  id: string
-  project_name: string
-  description: string | null
-  is_group_project: boolean
-  submission_deadline: string | null
-  status: string
-  academic_year: string | null
-  submission_status: 'submitted' | 'not_submitted'
-  session_details: SessionDetails | null
-  group_info: GroupInfo | null
-}
-
-// ── Mock data (matches GET /api/projects/my-enrollments/) ─────────────────
-const MOCK_ENROLLMENTS: EnrolledProject[] = [
-  {
-    id: '105',
-    project_name: 'Industrial Robot Arm Control Platform',
-    description:
-      'Build a control interface for industrial robot arm operations with real-time feedback.',
-    is_group_project: true,
-    submission_deadline: null,
-    status: 'active',
-    academic_year: '2025/2026',
-    submission_status: 'not_submitted',
-    session_details: null,
-    group_info: {
-      group_id: 'g1',
-      group_name: 'Team Alpha',
-      members: ['John Doe', 'Jane Smith', 'You'],
-    },
-  },
-  {
-    id: '201',
-    project_name: 'E-Commerce Platform',
-    description:
-      'Design and implement a full-stack e-commerce platform with payment integration.',
-    is_group_project: false,
-    submission_deadline: '2026-05-20T23:59:00Z',
-    status: 'active',
-    academic_year: '2025/2026',
-    submission_status: 'submitted',
-    session_details: {
-      session_id: '3',
-      scheduled_start: '2026-05-25T10:00:00Z',
-      scheduled_end: '2026-05-25T10:30:00Z',
-      location_room: 'Room 301',
-      status: 'scheduled',
-    },
-    group_info: null,
-  },
-  {
-    id: '202',
-    project_name: 'Machine Learning Model',
-    description:
-      'Train and evaluate a machine learning model for sentiment analysis.',
-    is_group_project: false,
-    submission_deadline: '2025-05-08T23:59:00Z',
-    status: 'completed',
-    academic_year: '2024/2025',
-    submission_status: 'submitted',
-    session_details: {
-      session_id: '5',
-      scheduled_start: '2025-05-10T11:00:00Z',
-      scheduled_end: '2025-05-10T11:30:00Z',
-      location_room: 'Room 201',
-      status: 'completed',
-    },
-    group_info: null,
-  },
-]
+import type { EnrolledProject } from '@/types/project'
 
 function getSubmissionBadge(project: EnrolledProject) {
   if (project.submission_status === 'submitted') {
@@ -125,9 +40,8 @@ function getDeadlineLabel(deadline: string | null) {
   })
 }
 
-export function MyProjectsView() {
-  // TODO: Replace with real API call to GET /api/projects/my-enrollments/
-  const projects = MOCK_ENROLLMENTS
+export function MyProjectsView({ initialProjects = [] }: { initialProjects?: EnrolledProject[] }) {
+  const projects = initialProjects
 
   if (projects.length === 0) {
     return (
@@ -240,7 +154,7 @@ export function MyProjectsView() {
                       href={`/dashboard/student/projects/${project.id}`}
                     >
                       <Button
-                        className="w-full cursor-pointer"
+                        className="w-full cursor-pointer text-black hover:text-black"
                         variant="outline"
                       >
                         <FileText className="mr-2 h-4 w-4" />
