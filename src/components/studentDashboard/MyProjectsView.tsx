@@ -39,6 +39,7 @@ function getDeadlineLabel(deadline: string | null) {
     year: 'numeric',
   })
 }
+// Hi test
 
 export function MyProjectsView({ initialProjects = [] }: { initialProjects?: EnrolledProject[] }) {
   const projects = initialProjects
