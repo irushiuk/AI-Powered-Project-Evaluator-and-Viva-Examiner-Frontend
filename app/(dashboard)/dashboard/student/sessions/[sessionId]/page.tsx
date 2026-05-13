@@ -8,6 +8,7 @@ import { SessionHeaderCard } from '@/components/studentDashboard/SessionHeaderCa
 import { SessionOngoingView } from '@/components/studentDashboard/SessionOngoingView'
 import { SessionUpcomingView } from '@/components/studentDashboard/SessionUpcomingView'
 import type { StudentSession } from '@/components/studentDashboard/sessionTypes'
+import type { SessionResults } from '@/components/studentDashboard/sessionTypes'
 
 type PageProps = {
   params: Promise<{ sessionId: string }>
@@ -37,10 +38,14 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
   }
 
   let session: StudentSession | null = null
+  let results: SessionResults | null = null
   let error: string | null = null
 
   try {
     const sessionData = await serverSessionService.getMySession(projectId)
+    if (sessionData.status === 'completed') {
+      results = await serverSessionService.getCompletedSessionResults(projectId, sessionId).catch(() => null)
+    }
 
     // Map backend response to frontend StudentSession type
     session = {
@@ -60,6 +65,7 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
             : 'completed',
       description: 'Session evaluation',
       ...(sessionData.rubrics && { rubrics: sessionData.rubrics }),
+      ...(results && { results }),
     }
   } catch (err) {
     error = err instanceof Error ? err.message : 'Failed to fetch session'
@@ -97,8 +103,15 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
       <div className="mt-8">
         {session.status === 'upcoming' && <SessionUpcomingView session={session} />}
         {session.status === 'ongoing' && <SessionOngoingView sessionId={sessionId} rubrics={session.rubrics} />}
-        {session.status === 'completed' && session.results && (
-          <SessionCompletedView results={session.results} />
+        {session.status === 'completed' && session.results && <SessionCompletedView results={session.results} />}
+        {session.status === 'completed' && !session.results && (
+          <Card>
+            <CardContent className="pt-8">
+              <p className="text-muted-foreground">
+                The session is completed, but the final results could not be loaded.
+              </p>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>

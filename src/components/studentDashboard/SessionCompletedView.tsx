@@ -92,10 +92,19 @@ export function SessionCompletedView({ results }: SessionCompletedViewProps) {
 
             <div>
               <Label className="text-muted-foreground">Project Report</Label>
-              <Button variant="outline" className="mt-2">
-                <FileDown className="mr-2 h-4 w-4" />
-                Download Report
-              </Button>
+              {results.submission.reportUrl ? (
+                <Button variant="outline" className="mt-2" asChild>
+                  <a href={results.submission.reportUrl} target="_blank" rel="noopener noreferrer">
+                    <FileDown className="mr-2 h-4 w-4" />
+                    Download Report
+                  </a>
+                </Button>
+              ) : (
+                <Button variant="outline" className="mt-2" disabled>
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Download Report
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -208,10 +217,19 @@ export function SessionCompletedView({ results }: SessionCompletedViewProps) {
               <p className="text-sm leading-relaxed text-muted-foreground">{results.feedback}</p>
             </div>
 
-            <Button className="w-full">
-              <FileDown className="mr-2 h-4 w-4" />
-              Download Full Report (PDF)
-            </Button>
+            {results.submission.reportUrl ? (
+              <Button className="w-full" asChild>
+                <a href={results.submission.reportUrl} target="_blank" rel="noopener noreferrer">
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Download Full Report (PDF)
+                </a>
+              </Button>
+            ) : (
+              <Button className="w-full" disabled>
+                <FileDown className="mr-2 h-4 w-4" />
+                Download Full Report (PDF)
+              </Button>
+            )}
           </CardContent>
         </Card>
       </TabsContent>

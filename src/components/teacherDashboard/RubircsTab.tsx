@@ -102,7 +102,11 @@ export default function RubricsTab({ projectId }: Props) {
   const toggleExpand = (id: string) =>
     setExpandedIds((prev) => {
       const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
       return next
     })
 
@@ -247,7 +251,7 @@ export default function RubricsTab({ projectId }: Props) {
               {/* Category header row */}
               <div className="flex items-center gap-3 p-4 sm:p-5">
                 {/* Color dot */}
-                <div className={`w-3 h-3 rounded-full ${c.bg} flex-shrink-0`} />
+                <div className={`w-3 h-3 rounded-full ${c.bg} shrink-0`} />
 
                 {/* Name + description */}
                 <div className="flex-1 min-w-0">
@@ -270,7 +274,7 @@ export default function RubricsTab({ projectId }: Props) {
                 </div>
 
                 {/* Actions */}
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                   {/* Add criteria */}
                   <button
                     onClick={() => {
@@ -457,7 +461,7 @@ function CriteriaRow({
 }) {
   return (
     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl group">
-      <div className="w-1 h-full min-h-[2rem] rounded-full bg-blue-200 flex-shrink-0" />
+      <div className="w-1 h-full min-h-8 rounded-full bg-blue-200 shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium text-gray-800">{criteria.criteria_name}</span>
