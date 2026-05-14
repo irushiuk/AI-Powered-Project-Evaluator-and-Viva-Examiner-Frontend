@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { formatColomboDate, formatColomboFullDate, formatColomboTime } from '@/utils/datetime'
 import type { NextSession, SessionStatusFilter, SessionsByStatus, StudentSessionSummary } from '@/types/session'
 
 type MySessionsViewProps = {
@@ -21,22 +22,10 @@ const tabs: Array<{ value: SessionStatusFilter; label: string }> = [
 ]
 
 function formatDateTime(value: string) {
-  const date = new Date(value)
   return {
-    date: date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    }),
-    fullDate: date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-    }),
-    time: date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-    }),
+    date: formatColomboDate(value),
+    fullDate: formatColomboFullDate(value),
+    time: formatColomboTime(value),
   }
 }
 

@@ -12,6 +12,7 @@ import {
 } from "@/types/session"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
+import { formatColomboDateTime, formatColomboTime, getColomboTimezoneLabel } from "@/utils/datetime"
 
 // ─────────────────────────────────────────────
 // Main SessionsTab
@@ -157,9 +158,10 @@ export default function SessionsTab({
                       : session.student_name ?? "Student Session"}
                   </p>
                   <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
-                    <span>🕐 {new Date(session.scheduled_start).toLocaleString()}</span>
-                    <span>→ {new Date(session.scheduled_end).toLocaleTimeString()}</span>
+                    <span>🕐 {formatColomboDateTime(session.scheduled_start)}</span>
+                    <span>→ {formatColomboTime(session.scheduled_end)}</span>
                     <span>📍 {session.location_room}</span>
+                    <span>({getColomboTimezoneLabel()})</span>
                   </div>
                 </div>
               </div>

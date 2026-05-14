@@ -1,6 +1,7 @@
 import { Calendar, User } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatColomboDate } from '@/utils/datetime'
 import type { StudentSession } from './sessionTypes'
 
 type SessionHeaderCardProps = {
@@ -46,12 +47,7 @@ export function SessionHeaderCard({ session }: SessionHeaderCardProps) {
             <div>
               <p className="text-sm font-medium">Date & Time</p>
               <p className="text-muted-foreground">
-                {new Date(session.date).toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}{' '}
+                {formatColomboDate(session.date)}{' '}
                 at {session.time}
               </p>
             </div>

@@ -44,7 +44,14 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
   try {
     const sessionData = await serverSessionService.getMySession(projectId)
     if (sessionData.status === 'completed') {
-      results = await serverSessionService.getCompletedSessionResults(projectId, sessionId).catch(() => null)
+      results = await serverSessionService
+        .getCompletedSessionResults(
+          projectId,
+          sessionId,
+          sessionData.submission_id,
+          sessionData.latest_code_submission_id,
+        )
+        .catch(() => null)
     }
 
     // Map backend response to frontend StudentSession type

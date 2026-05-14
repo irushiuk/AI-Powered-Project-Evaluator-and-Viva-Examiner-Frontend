@@ -14,6 +14,9 @@ export type SessionDetail = {
   status: 'scheduled' | 'in_progress' | 'completed'
   demo_completed_at?: string | null
   group_name?: string | null
+  submission_id?: string | null
+  latest_code_submission_id?: string | null
+  latest_code_analysis_status?: string | null
   group_members?: Array<{
     full_name: string
     registration_number: string
@@ -126,7 +129,12 @@ export const serverSessionService = {
     return data.data ?? data
   },
 
-  async getCompletedSessionResults(projectId: string, sessionId: string): Promise<SessionResults | null> {
+  async getCompletedSessionResults(
+    projectId: string,
+    sessionId: string,
+    submissionId?: string | null,
+    latestCodeSubmissionId?: string | null,
+  ): Promise<SessionResults | null> {
     const [submissionRes, reportRes] = await Promise.all([
       serverFetch(PROJECT_API.submission(projectId), { method: 'GET' }),
       serverFetch(VIVA_API.sessionReport(sessionId), { method: 'GET' }),
@@ -138,15 +146,18 @@ export const serverSessionService = {
 
     const submissionData = await submissionRes.json()
     const submissions = submissionData.data ?? submissionData
-    const submission: SubmissionDetail | null = Array.isArray(submissions) && submissions.length > 0 ? submissions[0] : null
+    const submission: SubmissionDetail | null = Array.isArray(submissions)
+      ? (submissions.find((item: { id?: string }) => item.id === submissionId) ?? submissions[0] ?? null)
+      : null
     if (!submission) return null
 
     const reportData = await reportRes.json()
     const report: VivaSessionReport = reportData.data ?? reportData
 
     let sonarSummary: SonarSummary | null = null
-    if (submission.latest_code_submission_id) {
-      const sonarRes = await serverFetch(CODE_ANALYSIS_API.sonarSummary(submission.latest_code_submission_id), {
+    const codeSubmissionId = latestCodeSubmissionId || submission.latest_code_submission_id
+    if (codeSubmissionId) {
+      const sonarRes = await serverFetch(CODE_ANALYSIS_API.sonarSummary(codeSubmissionId), {
         method: 'GET',
       })
       if (sonarRes.ok) {

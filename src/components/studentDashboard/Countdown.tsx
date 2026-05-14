@@ -1,34 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { parseColomboDateTime } from '@/utils/datetime'
 
 type CountdownProps = {
   targetDate: string
   targetTime: string
-}
-
-function getSessionTime(targetDate: string, targetTime: string) {
-  const [year, month, day] = targetDate.split('-').map(Number)
-  const match = targetTime.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
-
-  if (!year || !month || !day || !match) {
-    return Number.NaN
-  }
-
-  const [, hourValue, minuteValue, periodValue] = match
-  const period = periodValue.toUpperCase()
-  let hours = Number(hourValue)
-  const minutes = Number(minuteValue)
-
-  if (period === 'PM' && hours !== 12) {
-    hours += 12
-  }
-
-  if (period === 'AM' && hours === 12) {
-    hours = 0
-  }
-
-  return new Date(year, month - 1, day, hours, minutes).getTime()
 }
 
 export function Countdown({ targetDate, targetTime }: CountdownProps) {
@@ -36,7 +13,7 @@ export function Countdown({ targetDate, targetTime }: CountdownProps) {
 
   useEffect(() => {
     const calculateCountdown = () => {
-      const target = getSessionTime(targetDate, targetTime)
+      const target = parseColomboDateTime(targetDate, targetTime)
       const now = new Date().getTime()
       const diff = target - now
 

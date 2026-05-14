@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Search, Calendar, Clock, User, MapPin, Users, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatColomboDate } from '@/utils/datetime'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -228,7 +229,7 @@ export function AllSessionsView() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
-                      <span>{new Date(session.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      <span>{formatColomboDate(session.date)}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4" />
