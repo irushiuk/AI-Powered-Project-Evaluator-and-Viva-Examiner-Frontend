@@ -23,12 +23,13 @@ import {
   ActiveSession,
   EvalSessionStatus,
 } from "@/services/evaluationService"
+import { formatColomboTime } from "@/utils/datetime"
 
 // ─── tiny helpers ─────────────────────────────────────────────────────────────
 
 function fmt(iso: string | null): string {
   if (!iso) return "—"
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  return formatColomboTime(iso)
 }
 
 function elapsed(from: string | null): string {
@@ -390,7 +391,7 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
 
         {/* Card header */}
-        <div className="px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 flex items-center justify-between">
+        <div className="px-6 py-4 bg-linear-to-r from-blue-600 to-indigo-600 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-blue-200 uppercase tracking-widest mb-0.5">
               Active Session

@@ -14,7 +14,12 @@ export const rubricService = {
     const res = await apiFetch(PROJECTS_API.rubrics(projectId))
     if (!res.ok) throw new Error('Failed to fetch rubrics')
     const data = await res.json()
-    return data.data ?? data
+    const categories = data.data ?? data
+    return categories.map((c: any) => ({
+      ...c,
+      id: c.category_id,
+      criteria: c.criteria?.map((cr: any) => ({ ...cr, id: cr.criteria_id })) || []
+    }))
   },
 
   /** POST /projects/:id/rubrics/categories/create/ */
@@ -32,7 +37,12 @@ export const rubricService = {
       throw new Error(err.message || 'Failed to create category')
     }
     const data = await res.json()
-    return data.data ?? data
+    const category = data.data ?? data
+    return {
+      ...category,
+      id: category.category_id,
+      criteria: category.criteria?.map((cr: any) => ({ ...cr, id: cr.criteria_id })) || []
+    }
   },
 
   /** PUT /projects/:pid/rubrics/categories/:cid/update/ */
@@ -51,7 +61,12 @@ export const rubricService = {
       throw new Error(err.message || 'Failed to update category')
     }
     const data = await res.json()
-    return data.data ?? data
+    const category = data.data ?? data
+    return {
+      ...category,
+      id: category.category_id,
+      criteria: category.criteria?.map((cr: any) => ({ ...cr, id: cr.criteria_id })) || []
+    }
   },
 
   /** DELETE /projects/:pid/rubrics/categories/:cid/delete/ */
@@ -78,7 +93,8 @@ export const rubricService = {
       throw new Error(err.message || 'Failed to create criteria')
     }
     const data = await res.json()
-    return data.data ?? data
+    const criteria = data.data ?? data
+    return { ...criteria, id: criteria.criteria_id }
   },
 
   /** PUT /projects/:pid/rubrics/categories/:cid/criteria/:criId/update/ */
@@ -98,7 +114,8 @@ export const rubricService = {
       throw new Error(err.message || 'Failed to update criteria')
     }
     const data = await res.json()
-    return data.data ?? data
+    const criteria = data.data ?? data
+    return { ...criteria, id: criteria.criteria_id }
   },
 
   /** DELETE /projects/:pid/rubrics/categories/:cid/criteria/:criId/delete/ */
