@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/button"
 import { projectService } from "@/services/projectService"
 import { Project, CreateProjectPayload } from "@/types/project"
 import { toast } from "sonner"
+import useAuth from "@/hooks/useAuth"
 
 export default function ProjectsPage() {
+  const { isAuthenticated, isLoading: authLoading } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -25,7 +27,17 @@ export default function ProjectsPage() {
     }
   }
 
-  useEffect(() => { refresh() }, [])
+  // Wait until auth has finished initializing before fetching, so the request
+  // always goes out with a valid access token instead of racing against login.
+  useEffect(() => {
+    if (authLoading) return
+    if (!isAuthenticated) {
+      setLoading(false)
+      return
+    }
+    refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, isAuthenticated])
 
   const handleCreate = async (payload: CreateProjectPayload) => {
     await projectService.create(payload)
