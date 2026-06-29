@@ -10,6 +10,7 @@ import type {
   UpdateCategoryPayload,
   CreateCriteriaPayload,
 } from "@/types/rubric"
+import { Button } from "../ui/button"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,8 @@ export default function RubricsTab({ projectId }: Props) {
   const [categories, setCategories] = useState<RubricCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [pdfModal, setPdfModal] = useState(false)
+
 
   // Category modal state
   const [categoryModal, setCategoryModal] = useState<{
@@ -148,15 +151,23 @@ export default function RubricsTab({ projectId }: Props) {
           </span>
         </div>
 
-        <button
+        <Button
+          onClick={() => setPdfModal(true)}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          Upload PDF
+        </Button>
+
+        <Button
           onClick={() => setCategoryModal({ open: true, editing: null })}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors shadow-sm"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
           </svg>
           Add Category
-        </button>
+        </Button>
       </div>
 
       {/* ── Weight bar ───────────────────────────────────────────────────── */}
@@ -415,6 +426,18 @@ export default function RubricsTab({ projectId }: Props) {
             }
             setCriteriaModal({ open: false, categoryId: "", editing: null })
             load()
+          }}
+        />
+      )}
+
+      {pdfModal && (
+        <RubricPdfModal
+          projectId={projectId}
+          onClose={() => setPdfModal(false)}
+          onSuccess={() => {
+            setPdfModal(false)
+            load()
+            toast.success("Rubric imported from PDF!")
           }}
         />
       )}
@@ -865,6 +888,194 @@ function ModalFooter({
         {saving ? "Saving…" : saveLabel}
       </button>
     </div>
+  )
+}
+
+function RubricPdfModal({
+  projectId,
+  onClose,
+  onSuccess,
+}: {
+  projectId: string
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const [step, setStep] = useState<'upload' | 'preview' | 'saving'>('upload')
+  const [file, setFile] = useState<File | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [preview, setPreview] = useState<any>(null)
+  const [dragOver, setDragOver] = useState(false)
+
+  const handleFile = (f: File) => {
+    const ext = f.name.split('.').pop()?.toLowerCase()
+    if (ext !== 'pdf' && ext !== 'docx') {
+      toast.error('Only PDF or DOCX files are accepted')
+      return
+    }
+    setFile(f)
+  }
+
+  const handleUpload = async () => {
+    if (!file) return
+    setLoading(true)
+    try {
+      const data = await rubricService.uploadPreview(projectId, file)
+      setPreview(data)
+      setStep('preview')
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to parse PDF')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleConfirm = async () => {
+    setStep('saving')
+    try {
+      await rubricService.confirmSave(projectId, preview.preview)  // ← was: preview
+      onSuccess()
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save rubric')
+      setStep('preview')
+    }
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <ModalBox
+        title="Import Rubric from PDF"
+        icon={
+          <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center">
+            <svg className="w-5 h-5 text-violet-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+          </div>
+        }
+        onClose={onClose}
+      >
+        {step === 'upload' && (
+          <>
+            <p className="text-sm text-gray-500 mb-4">
+              Upload your rubric PDF or DOCX. Gemini AI will extract the structure automatically.
+            </p>
+
+            {/* Drop zone */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setDragOver(false)
+                const f = e.dataTransfer.files[0]
+                if (f) handleFile(f)
+              }}
+              onClick={() => document.getElementById('rubric-file-input')?.click()}
+              className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors
+                ${dragOver ? 'border-violet-400 bg-violet-50' : file ? 'border-emerald-300 bg-emerald-50' : 'border-gray-200 hover:border-violet-300 hover:bg-violet-50/50'}`}
+            >
+              <input
+                id="rubric-file-input"
+                type="file"
+                accept=".pdf,.docx"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
+              />
+              {file ? (
+                <>
+                  <svg className="w-8 h-8 text-emerald-500 mx-auto mb-2" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-sm font-semibold text-emerald-700">{file.name}</p>
+                  <p className="text-xs text-emerald-500 mt-0.5">{(file.size / 1024).toFixed(0)} KB — click to change</p>
+                </>
+              ) : (
+                <>
+                  <svg className="w-8 h-8 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  <p className="text-sm font-medium text-gray-500">Drop your PDF or DOCX here</p>
+                  <p className="text-xs text-gray-400 mt-0.5">or click to browse</p>
+                </>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition">
+                Cancel
+              </button>
+              <button
+                onClick={handleUpload}
+                disabled={!file || loading}
+                className="px-4 py-2 text-sm font-medium text-white bg-violet-600 hover:bg-violet-700 rounded-xl transition disabled:opacity-50 flex items-center gap-2"
+              >
+                {loading && <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>}
+                {loading ? 'Analysing with AI…' : 'Extract Rubric'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'preview' && preview && (
+          <>
+            <div className="mb-3">
+              <p className="text-sm font-semibold text-gray-800">{preview.project_name}</p>
+              <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{preview.project_description}</p>
+            </div>
+
+            {preview.extraction_notes && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
+                <p className="text-xs text-amber-700"><span className="font-semibold">AI Notes: </span>{preview.extraction_notes}</p>
+              </div>
+            )}
+
+            <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+              {preview.rubric_categories?.map((cat: any, i: number) => (
+                <div key={i} className="bg-gray-50 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-semibold text-gray-800">{cat.category_name}</span>
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{cat.weight_percentage}%</span>
+                  </div>
+                  <div className="space-y-1">
+                    {cat.criteria?.map((cr: any, j: number) => (
+                      <div key={j} className="flex items-center gap-2 text-xs text-gray-500 pl-2">
+                        <span className="w-1 h-1 rounded-full bg-gray-300 flex-shrink-0" />
+                        <span>{cr.criteria_name}</span>
+                        <span className="ml-auto text-gray-400">max {cr.max_score}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-between gap-2 mt-5">
+              <button onClick={() => setStep('upload')} className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition">
+                ← Re-upload
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                Save Rubric
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'saving' && (
+          <div className="py-8 text-center">
+            <svg className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-3" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+            <p className="text-sm text-gray-500">Saving rubric…</p>
+          </div>
+        )}
+      </ModalBox>
+    </Overlay>
   )
 }
 

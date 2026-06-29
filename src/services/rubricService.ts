@@ -1,5 +1,5 @@
 import apiFetch from './apiClient'
-import { PROJECTS_API } from '@/constants/api.constant'
+import { API_BASE, PROJECTS_API } from '@/constants/api.constant'
 import type {
   RubricCategory,
   CreateCategoryPayload,
@@ -100,6 +100,64 @@ export const rubricService = {
     const data = await res.json()
     return data.data ?? data
   },
+
+  /** POST /api/viva/rubric/upload-preview/ */
+  async uploadPreview(projectId: string, file: File): Promise<any> {
+    const formData = new FormData()
+    formData.append('rubric_file', file)
+    const res = await apiFetch(`${API_BASE}/viva/rubric/upload-preview/`, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || 'Failed to parse rubric')
+    }
+    return res.json()
+  },
+
+  /** POST /api/viva/rubric/confirm-save/ */
+  /** Saves the AI-extracted rubric into an existing project via individual category/criteria endpoints */
+  async confirmSave(projectId: string, previewData: any): Promise<void> {
+    const categories: any[] = previewData?.rubric_categories ?? []
+
+    for (const cat of categories) {
+      // Create the category
+      const catRes = await apiFetch(PROJECTS_API.createRubricCategory(projectId), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category_name: cat.category_name,
+          weight_percentage: cat.weight_percentage,
+          description: cat.description ?? '',
+        }),
+      })
+      if (!catRes.ok) {
+        const err = await catRes.json().catch(() => ({}))
+        throw new Error(err.message || `Failed to create category: ${cat.category_name}`)
+      }
+      const catData = await catRes.json()
+      const categoryId = catData?.data?.category_id ?? catData?.category_id ?? catData?.id
+
+      // Create each criterion under this category
+      for (const cr of cat.criteria ?? []) {
+        const crRes = await apiFetch(PROJECTS_API.createCriteria(projectId, categoryId), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            criteria_name: cr.criteria_name,
+            max_score: cr.max_score,
+            weight_in_category: cr.weight_in_category ?? 100,
+            description: cr.description ?? '',
+          }),
+        })
+        if (!crRes.ok) {
+          const err = await crRes.json().catch(() => ({}))
+          throw new Error(err.message || `Failed to create criterion: ${cr.criteria_name}`)
+        }
+      }
+    }
+},
 
   /** DELETE /projects/:pid/rubrics/categories/:cid/criteria/:criId/delete/ */
   async deleteCriteria(

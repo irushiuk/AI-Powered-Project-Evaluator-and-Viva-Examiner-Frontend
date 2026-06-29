@@ -132,9 +132,8 @@ export default function VivaQuestionsTab({ projectId }: Props) {
             Bloom&apos;s Taxonomy Distribution
           </p>
           <div className="flex h-4 rounded-full overflow-hidden gap-px bg-gray-100">
-            {BLOOMS_LEVELS.map((level) => {
+            {BLOOMS_LEVELS.filter((level) => levelCounts[level] > 0).map((level) => {
               const count = levelCounts[level]
-              if (!count) return null
               const pct = (count / questions.length) * 100
               const m = BLOOMS_META[level]
               return (
@@ -149,9 +148,8 @@ export default function VivaQuestionsTab({ projectId }: Props) {
           </div>
           {/* Legend chips */}
           <div className="flex flex-wrap gap-2 mt-3">
-            {BLOOMS_LEVELS.map((level) => {
+            {BLOOMS_LEVELS.filter((level) => levelCounts[level] > 0).map((level) => {
               const count = levelCounts[level]
-              if (!count) return null
               const m = BLOOMS_META[level]
               return (
                 <button
