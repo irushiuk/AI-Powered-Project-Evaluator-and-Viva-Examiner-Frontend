@@ -30,6 +30,8 @@ import type {
 } from '@/types/vivaSession'
 import { toast } from 'sonner'
 import AgoraVideoRoom from '@/components/agora/AgoraVideoRoom'
+import { cvAnalysisService } from '@/services/cvAnalysisService'
+import { useSessionRecorder } from '@/hooks/useSessionRecorder'
 
 const SKIP_ANSWER_TEXT = 'Student skipped this question.'
 
@@ -143,6 +145,30 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
   const startRequestRef = useRef(false)
   const mountedRef = useRef(false)
+
+  // Session recording: same camera/mic tracks Agora publishes; uploaded at
+  // session end for the examiner's post-hoc behavioral report.
+  const sessionRecorder = useSessionRecorder(sessionId)
+
+  const handleLocalTracks = useCallback(
+    (videoTrack: unknown, audioTrack: unknown) => {
+      sessionRecorder.start(videoTrack, audioTrack)
+    },
+    [sessionRecorder],
+  )
+
+  const uploadSessionRecording = useCallback(async () => {
+    try {
+      const file = await sessionRecorder.stop()
+      if (!file) return
+      toast.info('Uploading session recording…')
+      await cvAnalysisService.uploadRecording(sessionId, file)
+      toast.success('Session recording uploaded.')
+    } catch (err) {
+      console.warn('Session recording upload failed:', err)
+      toast.error('Could not upload the session recording.')
+    }
+  }, [sessionRecorder, sessionId])
 
   const loadFirstQuestion = useCallback(async () => {
     if (startRequestRef.current) return
@@ -345,7 +371,11 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
         clearCachedQuestion(sessionId)
         setHasFinished(true)
         toast.success('Viva session completed successfully.')
-        window.setTimeout(() => router.push('/dashboard/student/sessions'), 2200)
+        // Upload the recording before leaving so the examiner's behavioral
+        // report can be generated from it.
+        void uploadSessionRecording().finally(() => {
+          window.setTimeout(() => router.push('/dashboard/student/sessions'), 2200)
+        })
         return
       }
 
@@ -609,6 +639,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
         className="rounded-none border-0"
         extraControls={qaToggleButton}
         onMicToggle={handleMicToggle}
+        onLocalTracks={handleLocalTracks}
         overlayContent={
           <>
             {qaOverlay}

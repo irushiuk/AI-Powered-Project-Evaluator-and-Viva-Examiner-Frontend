@@ -25,6 +25,7 @@ import {
 } from "@/services/evaluationService"
 import { formatColomboTime } from "@/utils/datetime"
 import AgoraVideoRoom from "@/components/agora/AgoraVideoRoom"
+import BehavioralReportCard from "@/components/teacherDashboard/BehavioralReportCard"
 
 // ─── tiny helpers ─────────────────────────────────────────────────────────────
 
@@ -529,6 +530,9 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
           ) : null}
         </div>
       </div>
+
+      {/* Behavioral report — advisory CV analysis of the session recording */}
+      {isCompleted && <BehavioralReportCard sessionId={session.session_id} />}
 
       {/* Manual refresh hint */}
       {!isCompleted && (

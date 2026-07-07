@@ -28,11 +28,16 @@ export interface AgoraVideoRoomProps {
   className?: string
   /** Called whenever the mic is toggled. isMuted=true means mic is now OFF (answer recording should stop). */
   onMicToggle?: (isMuted: boolean) => void
+  /** Called once the local camera/mic tracks are live — e.g. to start session recording from the same capture pipeline. */
+  onLocalTracks?: (videoTrack: unknown, audioTrack: unknown) => void
 }
 
-export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle }: AgoraVideoRoomProps) {
+export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle, onLocalTracks }: AgoraVideoRoomProps) {
   const [localVideoTrack, setLocalVideoTrack] = useState<any>(null)
   const [localAudioTrack, setLocalAudioTrack] = useState<any>(null)
+  // Ref keeps the join effect's dependency list unchanged ([sessionId]).
+  const onLocalTracksRef = useRef(onLocalTracks)
+  onLocalTracksRef.current = onLocalTracks
   const [screenTrack, setScreenTrack] = useState<any>(null)
   const [remoteUsers, setRemoteUsers] = useState<any[]>([])
   const [isJoined, setIsJoined] = useState(false)
@@ -285,6 +290,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
 
         if (active) {
           setIsJoined(true)
+          onLocalTracksRef.current?.(videoTrack ?? null, audioTrack ?? null)
           toast.success('Joined live meeting room.')
         }
       } catch (err: any) {
