@@ -28,11 +28,21 @@ export interface AgoraVideoRoomProps {
   className?: string
   /** Called whenever the mic is toggled. isMuted=true means mic is now OFF (answer recording should stop). */
   onMicToggle?: (isMuted: boolean) => void
+  /** Called once the local camera/mic tracks are live — e.g. to start session recording from the same capture pipeline. */
+  onLocalTracks?: (videoTrack: unknown, audioTrack: unknown) => void
+  /** Toast shown when a remote participant joins (e.g. "Examiner joining now" on the student side). */
+  remoteJoinNotice?: string
 }
 
-export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle }: AgoraVideoRoomProps) {
+export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle, onLocalTracks, remoteJoinNotice }: AgoraVideoRoomProps) {
   const [localVideoTrack, setLocalVideoTrack] = useState<any>(null)
   const [localAudioTrack, setLocalAudioTrack] = useState<any>(null)
+  // Refs keep the join effect's dependency list unchanged ([sessionId]).
+  const onLocalTracksRef = useRef(onLocalTracks)
+  onLocalTracksRef.current = onLocalTracks
+  const remoteJoinNoticeRef = useRef(remoteJoinNotice)
+  remoteJoinNoticeRef.current = remoteJoinNotice
+  const noticedUidsRef = useRef<Set<string | number>>(new Set())
   const [screenTrack, setScreenTrack] = useState<any>(null)
   const [remoteUsers, setRemoteUsers] = useState<any[]>([])
   const [isJoined, setIsJoined] = useState(false)
@@ -167,6 +177,15 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         if (!active) return
 
         // Set up event listeners
+        client.on('user-joined', (user) => {
+          // Pre-notice ("Examiner joining now") — once per participant.
+          const notice = remoteJoinNoticeRef.current
+          if (notice && !noticedUidsRef.current.has(user.uid)) {
+            noticedUidsRef.current.add(user.uid)
+            toast.info(notice, { duration: 5000 })
+          }
+        })
+
         client.on('user-published', async (user, mediaType) => {
           await client.subscribe(user, mediaType)
           if (mediaType === 'video') {
@@ -285,6 +304,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
 
         if (active) {
           setIsJoined(true)
+          onLocalTracksRef.current?.(videoTrack ?? null, audioTrack ?? null)
           toast.success('Joined live meeting room.')
         }
       } catch (err: any) {

@@ -57,6 +57,24 @@ export const VIVA_API = {
 export const CODE_ANALYSIS_API = {
   sonarSummary: (codeSubmissionId: string) => `${API_BASE}/code-analysis/submissions/${codeSubmissionId}/sonar-summary/`,
 }
+
+export const CV_ANALYSIS_API = {
+  uploadRecording: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/cv/recording/`,
+  triggerAnalysis: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/cv/analyze/`,
+  summary: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/cv/summary/`,
+}
+
+export const LIVE_QUESTIONS_API = {
+  ask: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/live-questions/`,
+  list: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/live-questions/list/`,
+  pending: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/live-questions/pending/`,
+  answer: (sessionId: string, questionId: string) =>
+    `${API_BASE}/sessions/${sessionId}/live-questions/${questionId}/answer/`,
+}
+
+export const RUBRIC_EXTRACT_API = {
+  extract: (projectId: string) => `${API_BASE}/projects/${projectId}/rubrics/extract/`,
+}
  
 export const STUDENT_API = {
   availableProjects: `${API_BASE}/projects/available/`,

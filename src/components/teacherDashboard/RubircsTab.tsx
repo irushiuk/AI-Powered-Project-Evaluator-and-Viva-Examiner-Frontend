@@ -59,6 +59,7 @@ export default function RubricsTab({ projectId }: Props) {
   const [categories, setCategories] = useState<RubricCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [extracting, setExtracting] = useState(false)
 
   // Category modal state
   const [categoryModal, setCategoryModal] = useState<{
@@ -152,15 +153,58 @@ export default function RubricsTab({ projectId }: Props) {
           </span>
         </div>
 
-        <button
-          onClick={() => setCategoryModal({ open: true, editing: null })}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors shadow-sm"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          Add Category
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Upload a rubric document — AI extracts categories + criteria */}
+          <label
+            className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-xl transition-colors shadow-sm cursor-pointer
+              ${extracting
+                ? "bg-gray-100 text-gray-400 cursor-wait"
+                : "bg-white border border-blue-200 text-blue-700 hover:bg-blue-50"}`}
+          >
+            {extracting ? (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+            )}
+            {extracting ? "Extracting…" : "Upload Rubric File"}
+            <input
+              type="file"
+              accept=".pdf,.docx,.md,.markdown,.txt"
+              className="hidden"
+              disabled={extracting}
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                e.target.value = "" // allow re-selecting the same file
+                if (!file) return
+                setExtracting(true)
+                try {
+                  const message = await rubricService.extractFromFile(projectId, file)
+                  toast.success(message)
+                  await load()
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Extraction failed")
+                } finally {
+                  setExtracting(false)
+                }
+              }}
+            />
+          </label>
+
+          <button
+            onClick={() => setCategoryModal({ open: true, editing: null })}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors shadow-sm"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Category
+          </button>
+        </div>
       </div>
 
       {/* ── Weight bar ───────────────────────────────────────────────────── */}
