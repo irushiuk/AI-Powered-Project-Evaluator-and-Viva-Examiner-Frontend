@@ -24,6 +24,9 @@ import {
   EvalSessionStatus,
 } from "@/services/evaluationService"
 import { formatColomboTime } from "@/utils/datetime"
+import AgoraVideoRoom from "@/components/agora/AgoraVideoRoom"
+import BehavioralReportCard from "@/components/teacherDashboard/BehavioralReportCard"
+import LiveInterjectionCard from "@/components/teacherDashboard/LiveInterjectionCard"
 
 // ─── tiny helpers ─────────────────────────────────────────────────────────────
 
@@ -387,6 +390,14 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
   return (
     <div className="max-w-2xl mx-auto space-y-5">
 
+      {/* Video Call Room */}
+      {(session.status === "in_progress" || session.status === "demo_completed") && (
+        <>
+          <AgoraVideoRoom sessionId={session.session_id} />
+          <LiveInterjectionCard sessionId={session.session_id} />
+        </>
+      )}
+
       {/* Session card */}
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
 
@@ -523,6 +534,9 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
           ) : null}
         </div>
       </div>
+
+      {/* Behavioral report — advisory CV analysis of the session recording */}
+      {isCompleted && <BehavioralReportCard sessionId={session.session_id} />}
 
       {/* Manual refresh hint */}
       {!isCompleted && (

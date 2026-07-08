@@ -1,5 +1,5 @@
 import apiFetch from './apiClient'
-import { PROJECTS_API } from '@/constants/api.constant'
+import { PROJECTS_API, RUBRIC_EXTRACT_API } from '@/constants/api.constant'
 import type {
   RubricCategory,
   CreateCategoryPayload,
@@ -9,6 +9,21 @@ import type {
 } from '@/types/rubric'
 
 export const rubricService = {
+  /** POST /projects/:id/rubrics/extract/ — upload a rubric document
+   * (.pdf/.docx/.md/.txt); AI extracts categories + criteria onto the
+   * project. Returns the backend message for the toast. */
+  async extractFromFile(projectId: string, file: File): Promise<string> {
+    const form = new FormData()
+    form.append('rubric_file', file)
+    const res = await apiFetch(RUBRIC_EXTRACT_API.extract(projectId), {
+      method: 'POST',
+      body: form, // browser sets the multipart boundary
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.message || 'Rubric extraction failed')
+    return data.message || 'Rubric extracted.'
+  },
+
   /** GET /projects/:id/rubrics/ */
   async getAll(projectId: string): Promise<RubricCategory[]> {
     const res = await apiFetch(PROJECTS_API.rubrics(projectId))
