@@ -21,6 +21,16 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { vivaSessionService } from '@/services/vivaSessionService'
 import type {
   BloomsLevel,
@@ -138,6 +148,8 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
   const [speechSupported, setSpeechSupported] = useState(true)
   const [recordingTime, setRecordingTime] = useState(0)
   const [showQAPanel, setShowQAPanel] = useState(true)
+
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
 
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
@@ -421,7 +433,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
   // ─── Q&A Panel Content (rendered as overlay inside AgoraVideoRoom) ───
   const qaOverlay = (
     <div
-      className={`absolute top-0 right-0 bottom-[72px] w-[400px] max-w-full z-30 flex flex-col
+      className={`absolute top-0 right-0 bottom-[72px] w-[500px] max-w-full z-30 flex flex-col
         bg-slate-950/90 backdrop-blur-xl border-l border-slate-800/60
         transition-transform duration-300 ease-in-out
         ${showQAPanel ? 'translate-x-0' : 'translate-x-full'}`}
@@ -574,7 +586,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => router.back()}
+        onClick={() => setShowExitConfirm(true)}
         className="rounded-full text-slate-400 hover:text-white hover:bg-slate-800 px-3 ml-1"
       >
         <ArrowLeft className="mr-1.5 h-4 w-4" />
@@ -589,14 +601,14 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
       onClick={() => setShowQAPanel(true)}
       className="absolute right-0 top-1/2 -translate-y-1/2 z-30
         bg-blue-600/90 hover:bg-blue-600 backdrop-blur-md
-        text-white px-2 py-4 rounded-l-xl
-        shadow-lg transition-all duration-300 hover:px-3 cursor-pointer
-        flex flex-col items-center gap-1"
+        text-white px-4 py-8 rounded-l-2xl
+        shadow-xl transition-all duration-300 hover:px-5 cursor-pointer
+        flex flex-col items-center gap-2"
     >
-      <ChevronRight className="w-4 h-4 rotate-180" />
-      <span className="text-[10px] font-bold tracking-wider [writing-mode:vertical-lr] rotate-180">Q&A</span>
+      <ChevronRight className="w-5 h-5 rotate-180" />
+      <span className="text-[14px] font-bold tracking-wider [writing-mode:vertical-lr] rotate-180">Q&A</span>
       {currentQuestion && (
-        <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse mt-1" />
+        <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse mt-1" />
       )}
     </button>
   ) : null
@@ -604,6 +616,37 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
   // ─── Render: Full-screen Agora room with Q&A overlay ──────────────
   return (
     <div className="relative h-full w-full">
+      {/* Exit confirmation dialog */}
+      <AlertDialog open={showExitConfirm} onOpenChange={setShowExitConfirm}>
+        <AlertDialogContent className="bg-slate-900 border-slate-700 text-slate-100">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-slate-100">
+              Exit Viva Session?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-400">
+              Your session is still in progress. If you leave now, your current
+              question will be lost and you may not be able to rejoin. Are you
+              sure you want to exit?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white">
+              Stay in Session
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                window.speechSynthesis.cancel()
+                recognitionRef.current?.abort()
+                router.back()
+              }}
+            >
+              Exit Session
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AgoraVideoRoom
         sessionId={sessionId}
         className="rounded-none border-0"
