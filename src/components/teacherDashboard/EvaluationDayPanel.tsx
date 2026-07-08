@@ -26,6 +26,7 @@ import {
 import { formatColomboTime } from "@/utils/datetime"
 import AgoraVideoRoom from "@/components/agora/AgoraVideoRoom"
 import BehavioralReportCard from "@/components/teacherDashboard/BehavioralReportCard"
+import LiveInterjectionCard from "@/components/teacherDashboard/LiveInterjectionCard"
 
 // ─── tiny helpers ─────────────────────────────────────────────────────────────
 
@@ -391,7 +392,10 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
 
       {/* Video Call Room */}
       {(session.status === "in_progress" || session.status === "demo_completed") && (
-        <AgoraVideoRoom sessionId={session.session_id} />
+        <>
+          <AgoraVideoRoom sessionId={session.session_id} />
+          <LiveInterjectionCard sessionId={session.session_id} />
+        </>
       )}
 
       {/* Session card */}

@@ -31,6 +31,7 @@ import type {
 import { toast } from 'sonner'
 import AgoraVideoRoom from '@/components/agora/AgoraVideoRoom'
 import { cvAnalysisService } from '@/services/cvAnalysisService'
+import { liveQuestionService, type LiveQuestion } from '@/services/liveQuestionService'
 import { useSessionRecorder } from '@/hooks/useSessionRecorder'
 
 const SKIP_ANSWER_TEXT = 'Student skipped this question.'
@@ -140,6 +141,10 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
   const [speechSupported, setSpeechSupported] = useState(true)
   const [recordingTime, setRecordingTime] = useState(0)
   const [showQAPanel, setShowQAPanel] = useState(true)
+  // A live question typed by the examiner takes priority over the AI flow;
+  // the current AI question stays parked until this is answered.
+  const [examinerQuestion, setExaminerQuestion] = useState<LiveQuestion | null>(null)
+  const seenExaminerQuestionsRef = useRef<Set<string>>(new Set())
 
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
@@ -214,11 +219,14 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
   }, [loadFirstQuestion])
 
   useEffect(() => {
-    if (!currentQuestion || hasFinished) return
+    if (hasFinished) return
+    // The examiner's live question takes priority over the AI question.
+    const text = examinerQuestion?.question_text ?? currentQuestion?.question_text
+    if (!text) return
 
     window.speechSynthesis.cancel()
 
-    const utterance = new SpeechSynthesisUtterance(currentQuestion.question_text)
+    const utterance = new SpeechSynthesisUtterance(text)
     utterance.onstart = () => setIsSpeaking(true)
     utterance.onend = () => setIsSpeaking(false)
     utterance.onerror = () => setIsSpeaking(false)
@@ -231,7 +239,30 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
     return () => {
       window.speechSynthesis.cancel()
     }
-  }, [currentQuestion, hasFinished])
+  }, [currentQuestion, examinerQuestion, hasFinished])
+
+  // Poll for examiner-interjected questions while the viva is running.
+  useEffect(() => {
+    if (isLoading || hasFinished) return
+    const id = window.setInterval(async () => {
+      try {
+        const pending = await liveQuestionService.pending(sessionId)
+        if (
+          pending &&
+          !seenExaminerQuestionsRef.current.has(pending.question_id)
+        ) {
+          seenExaminerQuestionsRef.current.add(pending.question_id)
+          setExaminerQuestion(pending)
+          toast.info('The examiner has asked you a question.', {
+            duration: 6000,
+          })
+        }
+      } catch {
+        // transient poll failures are fine; next tick retries
+      }
+    }, 4000)
+    return () => window.clearInterval(id)
+  }, [sessionId, isLoading, hasFinished])
 
   useEffect(() => {
     if (isRecording) {
@@ -341,7 +372,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
   }
 
   const submitAnswer = async (rawAnswer: string) => {
-    if (!currentQuestion) return
+    if (!currentQuestion && !examinerQuestion) return
 
     const answer = rawAnswer.trim()
     if (!answer) {
@@ -351,6 +382,31 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
 
     if (isRecording) stopRecognition()
 
+    // An active examiner question intercepts the submit: the answer goes to
+    // the examiner, then the parked AI flow resumes.
+    if (examinerQuestion) {
+      setIsSubmitting(true)
+      try {
+        await liveQuestionService.answer(
+          sessionId,
+          examinerQuestion.question_id,
+          answer,
+        )
+        setExaminerQuestion(null)
+        setAnswerText('')
+        setInterimTranscript('')
+        toast.success('Answer sent to the examiner.')
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : 'Failed to send the answer',
+        )
+      } finally {
+        setIsSubmitting(false)
+      }
+      return
+    }
+
+    if (!currentQuestion) return
     setIsSubmitting(true)
 
     try {
@@ -446,7 +502,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
     )
   }
 
-  if (!currentQuestion) return null
+  if (!currentQuestion && !examinerQuestion) return null
 
   // ─── Q&A Panel Content (rendered as overlay inside AgoraVideoRoom) ───
   const qaOverlay = (
@@ -477,19 +533,29 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 scrollbar-thin">
         {/* Question metadata */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Badge variant="outline" className="border-slate-700 text-slate-300">Q{currentQuestion.question_number}</Badge>
-          <Badge variant="outline" className="border-slate-700 text-slate-300">{currentQuestion.criterion}</Badge>
-          <Badge variant="secondary" className="text-slate-300">{currentQuestion.blooms_level}</Badge>
-          <Badge variant="secondary" className="text-slate-300">{currentQuestion.difficulty}</Badge>
+          {examinerQuestion ? (
+            <Badge className="bg-amber-500/90 text-slate-950 hover:bg-amber-500">
+              Question from Examiner
+            </Badge>
+          ) : currentQuestion ? (
+            <>
+              <Badge variant="outline" className="border-slate-700 text-slate-300">Q{currentQuestion.question_number}</Badge>
+              <Badge variant="outline" className="border-slate-700 text-slate-300">{currentQuestion.criterion}</Badge>
+              <Badge variant="secondary" className="text-slate-300">{currentQuestion.blooms_level}</Badge>
+              <Badge variant="secondary" className="text-slate-300">{currentQuestion.difficulty}</Badge>
+            </>
+          ) : null}
         </div>
 
         {/* Question Card */}
         <div className={`rounded-xl border p-4 transition-colors duration-500 ${
-          isRecording
-            ? 'border-red-500/50 bg-red-500/5 shadow-[0_0_15px_rgba(239,68,68,0.15)]'
-            : isSpeaking
-              ? 'border-blue-500/50 bg-blue-500/5 shadow-[0_0_15px_rgba(59,130,246,0.15)]'
-              : 'border-slate-800 bg-slate-900/50'
+          examinerQuestion
+            ? 'border-amber-500/60 bg-amber-500/5 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+            : isRecording
+              ? 'border-red-500/50 bg-red-500/5 shadow-[0_0_15px_rgba(239,68,68,0.15)]'
+              : isSpeaking
+                ? 'border-blue-500/50 bg-blue-500/5 shadow-[0_0_15px_rgba(59,130,246,0.15)]'
+                : 'border-slate-800 bg-slate-900/50'
         }`}>
           <div className="flex items-center gap-2 mb-3">
             {isSpeaking ? (
@@ -506,8 +572,13 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
             </span>
           </div>
           <p className="text-base font-medium text-slate-100 leading-relaxed">
-            {currentQuestion.question_text}
+            {examinerQuestion?.question_text ?? currentQuestion?.question_text}
           </p>
+          {examinerQuestion && currentQuestion && (
+            <p className="mt-2 text-[11px] text-amber-400/70">
+              The AI question will resume after you answer the examiner.
+            </p>
+          )}
         </div>
 
         {/* Answer Textarea */}
@@ -538,7 +609,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
             size="sm"
             variant="outline"
             onClick={handleSkip}
-            disabled={isSubmitting || isRecording}
+            disabled={isSubmitting || isRecording || !!examinerQuestion}
             className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
           >
             <SkipForward className="mr-1.5 h-3.5 w-3.5" />
@@ -640,6 +711,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
         extraControls={qaToggleButton}
         onMicToggle={handleMicToggle}
         onLocalTracks={handleLocalTracks}
+        remoteJoinNotice="Examiner joining now"
         overlayContent={
           <>
             {qaOverlay}
