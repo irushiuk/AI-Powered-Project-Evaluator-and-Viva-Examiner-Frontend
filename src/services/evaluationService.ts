@@ -24,6 +24,7 @@ export interface ActiveSession {
   scheduled_start: string
   scheduled_end: string
   actual_start: string | null
+  demo_enabled: boolean
   demo_completed_at: string | null
   location_room: string
   status: EvalSessionStatus

@@ -48,6 +48,7 @@ export type AutoSchedulePayload = {
   date_ranges: DateRange[]
   duration_per_slot_minutes: number
   location_room: string
+  demo_enabled: boolean
 }
 
 // ── Manual scheduling payload ─────────────────────────────────────────────────
@@ -62,6 +63,7 @@ export type ManualSessionEntry = {
 
 export type ManualSchedulePayload = {
   sessions: ManualSessionEntry[]
+  demo_enabled: boolean
 }
 
 // ── Update payload ────────────────────────────────────────────────────────────

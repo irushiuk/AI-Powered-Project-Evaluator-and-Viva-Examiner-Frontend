@@ -230,6 +230,7 @@ function AutoScheduleModal({
   ])
   const [duration, setDuration] = useState("")
   const [room, setRoom] = useState("")
+  const [demoEnabled, setDemoEnabled] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -264,6 +265,7 @@ function AutoScheduleModal({
       date_ranges: dateRanges,
       duration_per_slot_minutes: Number(duration),
       location_room: room.trim(),
+      demo_enabled: demoEnabled,
     }
     try {
       await sessionService.scheduleAuto(projectId, payload)
@@ -375,6 +377,23 @@ function AutoScheduleModal({
             />
             {errors.room && <p className="text-red-500 text-xs mt-1">{errors.room}</p>}
           </div>
+
+          {/* Demo phase toggle */}
+          <label className="flex items-start gap-3 cursor-pointer bg-gray-50 rounded-xl p-3">
+            <input
+              type="checkbox"
+              checked={demoEnabled}
+              onChange={(e) => setDemoEnabled(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-400"
+            />
+            <span className="text-sm">
+              <span className="font-medium text-gray-700">Include a demo / presentation phase</span>
+              <span className="block text-xs text-gray-500 mt-0.5">
+                Students present (screen share) before the AI viva begins. Leave
+                off to go straight to AI questions.
+              </span>
+            </span>
+          </label>
         </div>
 
         <div className="px-7 py-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50 rounded-b-2xl">
@@ -405,6 +424,7 @@ function ManualScheduleModal({
   const [entries, setEntries] = useState<ManualSessionEntry[]>([
     { student_id: "", group_id: "", scheduled_start: "", scheduled_end: "", location_room: "" },
   ])
+  const [demoEnabled, setDemoEnabled] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -443,7 +463,7 @@ function ManualScheduleModal({
       location_room: entry.location_room.trim(),
     }))
     try {
-      await sessionService.scheduleManual(projectId, { sessions })
+      await sessionService.scheduleManual(projectId, { sessions, demo_enabled: demoEnabled })
       toast.success("Sessions scheduled successfully")
       onScheduled()
     } catch (err) {
@@ -538,6 +558,23 @@ function ManualScheduleModal({
           >
             + Add Another Session
           </button>
+
+          {/* Demo phase toggle — applies to all sessions scheduled here */}
+          <label className="flex items-start gap-3 cursor-pointer bg-gray-50 rounded-xl p-3">
+            <input
+              type="checkbox"
+              checked={demoEnabled}
+              onChange={(e) => setDemoEnabled(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-400"
+            />
+            <span className="text-sm">
+              <span className="font-medium text-gray-700">Include a demo / presentation phase</span>
+              <span className="block text-xs text-gray-500 mt-0.5">
+                Students present (screen share) before the AI viva begins. Leave
+                off to go straight to AI questions.
+              </span>
+            </span>
+          </label>
         </div>
 
         <div className="px-7 py-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50 rounded-b-2xl">

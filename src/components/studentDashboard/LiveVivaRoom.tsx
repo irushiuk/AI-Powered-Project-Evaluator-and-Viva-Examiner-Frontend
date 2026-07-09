@@ -11,6 +11,7 @@ import {
   MessageSquareText,
   Mic,
   MicOff,
+  Monitor,
   SkipForward,
   Volume2,
   VolumeX,
@@ -155,11 +156,17 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
   // the current AI question stays parked until this is answered.
   const [examinerQuestion, setExaminerQuestion] = useState<LiveQuestion | null>(null)
   const seenExaminerQuestionsRef = useRef<Set<string>>(new Set())
-  // Demo phase: the examiner started the session but hasn't completed the
-  // demo yet. The student presents (screen share) in the video room; the AI
-  // viva only begins once the examiner clicks "Complete Demo".
-  // null = still checking, true = in demo, false = viva phase.
-  const [demoPhase, setDemoPhase] = useState<boolean | null>(null)
+  // Whether this session has a demo phase is decided by the EXAMINER when the
+  // session is scheduled (session.demo_enabled). On entry we read that flag:
+  //   'checking'   → fetching session status (which demo mode applies)
+  //   'presenting' → demo phase: students present (screen share); no AI yet.
+  //                  The student who is sharing gets an "End Demo" button; the
+  //                  examiner's "Complete Demo" also ends it.
+  //   'done'       → AI viva is running (no demo, or the demo has ended)
+  const [demoState, setDemoState] = useState<'checking' | 'presenting' | 'done'>('checking')
+  // True when THIS student is the one sharing their screen — only the presenter
+  // sees the "End Demo & Start Viva" button.
+  const [isSharingScreen, setIsSharingScreen] = useState(false)
 
   const [showExitConfirm, setShowExitConfirm] = useState(false)
 
@@ -227,25 +234,30 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
   useEffect(() => {
     mountedRef.current = true
 
-    // Decide whether we're in the demo phase (present, don't start the AI
-    // viva yet) or the viva phase. If the status check fails, fall back to
-    // starting the viva so a status hiccup never blocks the student.
+    // Decide the entry mode from the examiner-set demo flag:
+    //   • resume (question already cached) → straight to the viva
+    //   • demo_enabled and not yet completed → demo/presentation phase
+    //   • otherwise → AI viva
+    // A status hiccup falls back to the viva so it never blocks the student.
     ;(async () => {
+      if (getCachedQuestion(sessionId)) {
+        setDemoState('done')
+        loadFirstQuestion()
+        return
+      }
       try {
         const status = await vivaSessionService.getSessionStatus(sessionId)
         if (!mountedRef.current) return
-        const inDemo =
-          status.status === 'in_progress' && !status.demo_completed_at
-        if (inDemo) {
-          setDemoPhase(true)
+        if (status.demo_enabled && !status.demo_completed_at) {
+          setDemoState('presenting')
           setIsLoading(false)
         } else {
-          setDemoPhase(false)
+          setDemoState('done')
           loadFirstQuestion()
         }
       } catch {
         if (!mountedRef.current) return
-        setDemoPhase(false)
+        setDemoState('done')
         loadFirstQuestion()
       }
     })()
@@ -257,19 +269,18 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
     }
   }, [loadFirstQuestion, sessionId])
 
-  // While in the demo phase, poll until the examiner completes the demo,
-  // then transition into the AI viva.
+  // During the demo phase, poll until the demo is ended — by the presenting
+  // student, a teammate, or the examiner's "Complete Demo" — then start the viva.
   useEffect(() => {
-    if (demoPhase !== true) return
+    if (demoState !== 'presenting') return
     const id = window.setInterval(async () => {
       try {
         const status = await vivaSessionService.getSessionStatus(sessionId)
         if (!mountedRef.current) return
         if (status.demo_completed_at || status.status === 'completed') {
           window.clearInterval(id)
-          setDemoPhase(false)
+          setDemoState('done')
           setIsLoading(true)
-          toast.success('Demo complete — your viva is starting.')
           loadFirstQuestion()
         }
       } catch {
@@ -277,7 +288,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
       }
     }, 5000)
     return () => window.clearInterval(id)
-  }, [demoPhase, sessionId, loadFirstQuestion])
+  }, [demoState, sessionId, loadFirstQuestion])
 
   useEffect(() => {
     if (hasFinished) return
@@ -304,7 +315,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
 
   // Poll for examiner-interjected questions while the viva is running.
   useEffect(() => {
-    if (isLoading || hasFinished) return
+    if (isLoading || hasFinished || demoState !== 'done') return
     const id = window.setInterval(async () => {
       try {
         const pending = await liveQuestionService.pending(sessionId)
@@ -323,14 +334,14 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
       }
     }, 4000)
     return () => window.clearInterval(id)
-  }, [sessionId, isLoading, hasFinished])
+  }, [sessionId, isLoading, hasFinished, demoState])
 
   // Group sync: poll the latest AI question so a member's screen advances
   // when a teammate answers. Harmless in individual mode (id won't change
   // underneath). Never overrides an active examiner question or an in-flight
   // submission.
   useEffect(() => {
-    if (isLoading || hasFinished || demoPhase !== false) return
+    if (isLoading || hasFinished || demoState !== 'done') return
     const id = window.setInterval(async () => {
       if (isSubmitting || examinerQuestion) return
       try {
@@ -359,7 +370,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
     }, 4000)
     return () => window.clearInterval(id)
   }, [
-    sessionId, isLoading, hasFinished, demoPhase, isSubmitting,
+    sessionId, isLoading, hasFinished, demoState, isSubmitting,
     examinerQuestion, currentQuestion?.question_id,
   ])
 
@@ -557,6 +568,26 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
     submitAnswer(SKIP_ANSWER_TEXT)
   }
 
+  // Presenting student clicked "End Demo & Start Viva". Tell the backend so
+  // every participant (and the examiner) advances; the poll then starts the
+  // viva. We also transition locally so it feels instant.
+  const [endingDemo, setEndingDemo] = useState(false)
+  const handleEndDemo = async () => {
+    if (endingDemo) return
+    setEndingDemo(true)
+    try {
+      await vivaSessionService.endDemo(sessionId)
+      toast.success('Demo finished — your viva is starting.')
+      setDemoState('done')
+      setIsLoading(true)
+      loadFirstQuestion()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to end the demo')
+    } finally {
+      setEndingDemo(false)
+    }
+  }
+
   // ─── Full-screen loading state ────────────────────────────────────
   if (isLoading) {
     return (
@@ -601,23 +632,45 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
     )
   }
 
-  // ─── Demo phase: present in the video room; AI viva not started yet ───
-  if (demoPhase === true) {
+  // ─── Demo phase: students present (screen share); AI viva not started yet ──
+  // The examiner enabled a demo for this session. Everyone joins the room; the
+  // presenter shares their screen (not everyone has to). Only the student who
+  // is sharing sees the "End Demo & Start Viva" button.
+  if (demoState === 'presenting') {
     return (
       <div className="relative h-full w-full">
         <AgoraVideoRoom
           sessionId={sessionId}
           className="rounded-none border-0"
           onLocalTracks={handleLocalTracks}
+          onScreenShareChange={setIsSharingScreen}
           remoteJoinNotice="Examiner joining now"
           overlayContent={
-            <div className="absolute left-1/2 top-4 z-30 -translate-x-1/2">
-              <div className="flex items-center gap-2 rounded-full bg-amber-500/90 px-4 py-2 text-sm font-medium text-slate-950 shadow-lg">
-                <Volume2 className="h-4 w-4" />
-                Demo in progress — present your work (use Share Screen). Your
-                viva questions begin once the examiner ends the demo.
+            <>
+              <div className="absolute left-1/2 top-4 z-30 -translate-x-1/2">
+                <div className="flex items-center gap-2 rounded-full bg-amber-500/90 px-4 py-2 text-sm font-medium text-slate-950 shadow-lg">
+                  <Monitor className="h-4 w-4" />
+                  Demo phase — the presenter can use “Share Screen”. Your viva
+                  begins once the demo ends.
+                </div>
               </div>
-            </div>
+              {isSharingScreen && (
+                <div className="absolute bottom-24 left-1/2 z-30 -translate-x-1/2">
+                  <Button
+                    onClick={handleEndDemo}
+                    disabled={endingDemo}
+                    size="lg"
+                    className="bg-blue-600 font-semibold text-white shadow-xl hover:bg-blue-700"
+                  >
+                    {endingDemo ? (
+                      <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Ending…</>
+                    ) : (
+                      <><CheckCircle2 className="mr-2 h-5 w-5" /> End Demo &amp; Start Viva</>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </>
           }
         />
       </div>
