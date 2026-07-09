@@ -10,6 +10,7 @@ const API_PROXY_TARGET = process.env.API_PROXY_TARGET;
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  skipTrailingSlashRedirect: true, // Preserve trailing slashes for Django API proxy
   experimental: {
     serverActions: {
       bodySizeLimit: "2mb",
