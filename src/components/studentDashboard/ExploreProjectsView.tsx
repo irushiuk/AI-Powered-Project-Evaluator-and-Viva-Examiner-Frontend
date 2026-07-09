@@ -69,6 +69,9 @@ export function ExploreProjectsView({ initialProjects = [] }: { initialProjects?
   const [pendingProject, setPendingProject] =
     useState<AvailableProject | null>(null)
   const [groupNumber, setGroupNumber] = useState('')
+  // Teammate emails for group projects — enrolling student lists their team
+  // and the whole group is enrolled in one shot.
+  const [memberEmails, setMemberEmails] = useState<string[]>([''])
   const [isEnrolling, setIsEnrolling] = useState(false)
 
   const filteredProjects = useMemo(() => {
@@ -94,17 +97,23 @@ export function ExploreProjectsView({ initialProjects = [] }: { initialProjects?
     if (project.enrolled) return
     setPendingProject(project)
     setGroupNumber('')
+    setMemberEmails([''])
   }
 
   const confirmEnroll = async () => {
     if (!pendingProject) return
     if (pendingProject.is_group_project && !groupNumber.trim()) return
 
+    const cleanedEmails = memberEmails
+      .map((e) => e.trim())
+      .filter((e) => e.length > 0)
+
     setIsEnrolling(true)
     try {
       const result = await enrollInProjectAction(
         pendingProject.id,
-        pendingProject.is_group_project ? groupNumber.trim() : undefined
+        pendingProject.is_group_project ? groupNumber.trim() : undefined,
+        pendingProject.is_group_project ? cleanedEmails : undefined
       )
       if (!result.ok) {
         toast.error(result.error)
@@ -121,6 +130,7 @@ export function ExploreProjectsView({ initialProjects = [] }: { initialProjects?
       )
       setPendingProject(null)
       setGroupNumber('')
+      setMemberEmails([''])
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to enroll')
     } finally {
@@ -282,9 +292,47 @@ export function ExploreProjectsView({ initialProjects = [] }: { initialProjects?
                 onChange={(e) => setGroupNumber(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Enter your group name. If your teammates already created the
-                group, use the same name to join them.
+                Enter your group name/number.
               </p>
+
+              <Label className="pt-2">Teammates&apos; emails</Label>
+              <p className="text-xs text-muted-foreground -mt-1">
+                Add your group members&apos; university emails — they&apos;ll be
+                enrolled automatically. Don&apos;t include your own.
+              </p>
+              {memberEmails.map((email, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <Input
+                    type="email"
+                    placeholder="teammate@university.edu"
+                    value={email}
+                    onChange={(e) => {
+                      const next = [...memberEmails]
+                      next[idx] = e.target.value
+                      setMemberEmails(next)
+                    }}
+                  />
+                  {memberEmails.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMemberEmails(memberEmails.filter((_, i) => i !== idx))
+                      }
+                      className="shrink-0 rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted"
+                      aria-label="Remove teammate"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setMemberEmails([...memberEmails, ''])}
+                className="text-sm text-primary hover:underline"
+              >
+                + Add another teammate
+              </button>
             </div>
           )}
 

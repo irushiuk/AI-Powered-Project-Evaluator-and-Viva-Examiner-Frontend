@@ -17,6 +17,7 @@ interface SubmissionFormProps {
 export function SubmissionForm({ projectId, onSuccess }: SubmissionFormProps) {
   const [repoUrl, setRepoUrl] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  const [pptFile, setPptFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [reportError, setReportError] = useState('')
 
@@ -34,6 +35,9 @@ export function SubmissionForm({ projectId, onSuccess }: SubmissionFormProps) {
       formData.append('github_repo_url', repoUrl)
       if (file) {
         formData.append('report_file', file)
+      }
+      if (pptFile) {
+        formData.append('presentation_file', pptFile)
       }
 
       const result = await submitProjectWorkAction(projectId, formData)
@@ -88,6 +92,26 @@ export function SubmissionForm({ projectId, onSuccess }: SubmissionFormProps) {
           </label>
         </div>
         {reportError && <p className="text-sm text-destructive">{reportError}</p>}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="ppt">Presentation (optional)</Label>
+        <div className="cursor-pointer rounded-lg border-2 border-dashed border-border p-6 text-center transition hover:bg-secondary/50">
+          <input
+            id="ppt"
+            type="file"
+            accept=".ppt,.pptx"
+            onChange={(e) => setPptFile(e.target.files?.[0] || null)}
+            className="hidden"
+          />
+          <label htmlFor="ppt" className="cursor-pointer">
+            <Upload className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+            <p className="text-sm font-medium">
+              {pptFile ? pptFile.name : 'Click to upload your slides'}
+            </p>
+            <p className="text-xs text-muted-foreground">PPT / PPTX files only</p>
+          </label>
+        </div>
       </div>
 
       <Button type="submit" disabled={isSubmitting} className="w-full">

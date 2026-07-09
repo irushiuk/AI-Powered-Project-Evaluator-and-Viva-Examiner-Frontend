@@ -36,9 +36,15 @@ export type SubmitVivaAnswerResponse = {
 export type VivaSessionStatusResponse = {
   session_id: string
   status: 'scheduled' | 'in_progress' | 'completed'
+  demo_completed_at: string | null
   scheduled_start: string
   scheduled_end: string
   actual_start: string | null
   total_questions_asked: number
   total_answers_submitted: number
+}
+
+export type CurrentQuestionResponse = {
+  question: VivaQuestion | null
+  session_complete: boolean
 }

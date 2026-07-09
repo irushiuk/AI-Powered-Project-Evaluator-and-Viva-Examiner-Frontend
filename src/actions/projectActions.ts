@@ -10,13 +10,18 @@ export type ActionResult<T = void> =
 
 export async function enrollInProjectAction(
   projectId: string,
-  groupNumber?: string
+  groupNumber?: string,
+  memberEmails?: string[]
 ): Promise<ActionResult> {
   try {
+    const body: Record<string, unknown> = {}
+    if (groupNumber) body.group_number = groupNumber
+    if (memberEmails && memberEmails.length) body.member_emails = memberEmails
+
     const res = await serverFetch(PROJECT_API.enroll(projectId), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(groupNumber ? { group_number: groupNumber } : {}),
+      body: JSON.stringify(body),
     })
 
     if (!res.ok) {

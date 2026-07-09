@@ -155,6 +155,11 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
   // the current AI question stays parked until this is answered.
   const [examinerQuestion, setExaminerQuestion] = useState<LiveQuestion | null>(null)
   const seenExaminerQuestionsRef = useRef<Set<string>>(new Set())
+  // Demo phase: the examiner started the session but hasn't completed the
+  // demo yet. The student presents (screen share) in the video room; the AI
+  // viva only begins once the examiner clicks "Complete Demo".
+  // null = still checking, true = in demo, false = viva phase.
+  const [demoPhase, setDemoPhase] = useState<boolean | null>(null)
 
   const [showExitConfirm, setShowExitConfirm] = useState(false)
 
@@ -221,14 +226,58 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
 
   useEffect(() => {
     mountedRef.current = true
-    loadFirstQuestion()
+
+    // Decide whether we're in the demo phase (present, don't start the AI
+    // viva yet) or the viva phase. If the status check fails, fall back to
+    // starting the viva so a status hiccup never blocks the student.
+    ;(async () => {
+      try {
+        const status = await vivaSessionService.getSessionStatus(sessionId)
+        if (!mountedRef.current) return
+        const inDemo =
+          status.status === 'in_progress' && !status.demo_completed_at
+        if (inDemo) {
+          setDemoPhase(true)
+          setIsLoading(false)
+        } else {
+          setDemoPhase(false)
+          loadFirstQuestion()
+        }
+      } catch {
+        if (!mountedRef.current) return
+        setDemoPhase(false)
+        loadFirstQuestion()
+      }
+    })()
 
     return () => {
       mountedRef.current = false
       window.speechSynthesis.cancel()
       recognitionRef.current?.abort()
     }
-  }, [loadFirstQuestion])
+  }, [loadFirstQuestion, sessionId])
+
+  // While in the demo phase, poll until the examiner completes the demo,
+  // then transition into the AI viva.
+  useEffect(() => {
+    if (demoPhase !== true) return
+    const id = window.setInterval(async () => {
+      try {
+        const status = await vivaSessionService.getSessionStatus(sessionId)
+        if (!mountedRef.current) return
+        if (status.demo_completed_at || status.status === 'completed') {
+          window.clearInterval(id)
+          setDemoPhase(false)
+          setIsLoading(true)
+          toast.success('Demo complete — your viva is starting.')
+          loadFirstQuestion()
+        }
+      } catch {
+        // transient; next tick retries
+      }
+    }, 5000)
+    return () => window.clearInterval(id)
+  }, [demoPhase, sessionId, loadFirstQuestion])
 
   useEffect(() => {
     if (hasFinished) return
@@ -275,6 +324,44 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
     }, 4000)
     return () => window.clearInterval(id)
   }, [sessionId, isLoading, hasFinished])
+
+  // Group sync: poll the latest AI question so a member's screen advances
+  // when a teammate answers. Harmless in individual mode (id won't change
+  // underneath). Never overrides an active examiner question or an in-flight
+  // submission.
+  useEffect(() => {
+    if (isLoading || hasFinished || demoPhase !== false) return
+    const id = window.setInterval(async () => {
+      if (isSubmitting || examinerQuestion) return
+      try {
+        const { question, session_complete } =
+          await vivaSessionService.getCurrentQuestion(sessionId)
+        if (!mountedRef.current) return
+        if (session_complete) {
+          setHasFinished(true)
+          return
+        }
+        const next = question ? normalizeQuestion(question) : null
+        if (
+          next &&
+          next.question_id !== currentQuestion?.question_id
+        ) {
+          setCurrentQuestion(next)
+          setCachedQuestion(sessionId, next)
+          setAnswerText('')
+          setInterimTranscript('')
+          setLastFeedback(null)
+          toast.info('Your teammate answered — moving to the next question.')
+        }
+      } catch {
+        // transient; next tick retries
+      }
+    }, 4000)
+    return () => window.clearInterval(id)
+  }, [
+    sessionId, isLoading, hasFinished, demoPhase, isSubmitting,
+    examinerQuestion, currentQuestion?.question_id,
+  ])
 
   useEffect(() => {
     if (isRecording) {
@@ -510,6 +597,29 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
           <h2 className="text-2xl font-bold">Session Complete</h2>
           <p className="text-slate-400">Your answers were submitted. Redirecting you back to your sessions.</p>
         </div>
+      </div>
+    )
+  }
+
+  // ─── Demo phase: present in the video room; AI viva not started yet ───
+  if (demoPhase === true) {
+    return (
+      <div className="relative h-full w-full">
+        <AgoraVideoRoom
+          sessionId={sessionId}
+          className="rounded-none border-0"
+          onLocalTracks={handleLocalTracks}
+          remoteJoinNotice="Examiner joining now"
+          overlayContent={
+            <div className="absolute left-1/2 top-4 z-30 -translate-x-1/2">
+              <div className="flex items-center gap-2 rounded-full bg-amber-500/90 px-4 py-2 text-sm font-medium text-slate-950 shadow-lg">
+                <Volume2 className="h-4 w-4" />
+                Demo in progress — present your work (use Share Screen). Your
+                viva questions begin once the examiner ends the demo.
+              </div>
+            </div>
+          }
+        />
       </div>
     )
   }

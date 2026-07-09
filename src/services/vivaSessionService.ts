@@ -1,5 +1,6 @@
 import { VIVA_API } from '@/constants/api.constant'
 import type {
+  CurrentQuestionResponse,
   StartVivaResponse,
   SubmitVivaAnswerResponse,
   VivaSessionStatusResponse,
@@ -53,5 +54,13 @@ export const vivaSessionService = {
     const res = await apiFetch(VIVA_API.sessionStatus(sessionId))
 
     return readJson<VivaSessionStatusResponse>(res, 'Failed to fetch viva status')
+  },
+
+  /** Latest AI question for the session (read-only). Group members poll this
+   * so their screens advance when a teammate answers. */
+  async getCurrentQuestion(sessionId: string): Promise<CurrentQuestionResponse> {
+    const res = await apiFetch(VIVA_API.currentQuestion(sessionId))
+
+    return readJson<CurrentQuestionResponse>(res, 'Failed to fetch current question')
   },
 }
