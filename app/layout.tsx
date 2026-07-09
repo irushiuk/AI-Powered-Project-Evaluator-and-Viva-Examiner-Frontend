@@ -2,6 +2,7 @@ import '../styles/globals.css'
 import { Poppins } from 'next/font/google'
 import AuthProvider from '@/context/AuthContext'
 import { Toaster } from '@/components/ui/sonner'
+import { getServerUser } from '@/services/serverApi'
 
 const poppins = Poppins({
   subsets: ['latin'],
@@ -18,11 +19,15 @@ export const metadata = {
   },
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // Resolve the session on the server so the client knows the user at paint
+  // time — no "Checking session..." flash on initial load.
+  const initialUser = await getServerUser()
+
   return (
     <html lang="en">
       <body className={poppins.className}>
-        <AuthProvider>
+        <AuthProvider initialUser={initialUser}>
           {children}
           <Toaster />
         </AuthProvider>

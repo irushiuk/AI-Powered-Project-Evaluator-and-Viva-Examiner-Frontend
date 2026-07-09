@@ -32,9 +32,12 @@ export interface AgoraVideoRoomProps {
   onLocalTracks?: (videoTrack: unknown, audioTrack: unknown) => void
   /** Toast shown when a remote participant joins (e.g. "Examiner joining now" on the student side). */
   remoteJoinNotice?: string
+  /** Called whenever this user starts/stops sharing their screen. Lets the parent
+   * show controls (e.g. "End Demo") only to the participant who is presenting. */
+  onScreenShareChange?: (isSharing: boolean) => void
 }
 
-export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle, onLocalTracks, remoteJoinNotice }: AgoraVideoRoomProps) {
+export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle, onLocalTracks, remoteJoinNotice, onScreenShareChange }: AgoraVideoRoomProps) {
   const [localVideoTrack, setLocalVideoTrack] = useState<any>(null)
   const [localAudioTrack, setLocalAudioTrack] = useState<any>(null)
   // Refs keep the join effect's dependency list unchanged ([sessionId]).
@@ -42,6 +45,8 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
   onLocalTracksRef.current = onLocalTracks
   const remoteJoinNoticeRef = useRef(remoteJoinNotice)
   remoteJoinNoticeRef.current = remoteJoinNotice
+  const onScreenShareChangeRef = useRef(onScreenShareChange)
+  onScreenShareChangeRef.current = onScreenShareChange
   const noticedUidsRef = useRef<Set<string | number>>(new Set())
   const [screenTrack, setScreenTrack] = useState<any>(null)
   const [remoteUsers, setRemoteUsers] = useState<any[]>([])
@@ -132,6 +137,11 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
     return () => {
       closeDocumentPiP()
     }
+  }, [isSharingScreen])
+
+  // Notify the parent when this user's screen-share state changes.
+  useEffect(() => {
+    onScreenShareChangeRef.current?.(isSharingScreen)
   }, [isSharingScreen])
 
   useEffect(() => {

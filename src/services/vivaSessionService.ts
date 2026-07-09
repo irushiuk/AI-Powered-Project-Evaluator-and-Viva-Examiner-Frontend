@@ -1,4 +1,4 @@
-import { VIVA_API } from '@/constants/api.constant'
+import { SESSION_API, VIVA_API } from '@/constants/api.constant'
 import type {
   CurrentQuestionResponse,
   StartVivaResponse,
@@ -62,5 +62,13 @@ export const vivaSessionService = {
     const res = await apiFetch(VIVA_API.currentQuestion(sessionId))
 
     return readJson<CurrentQuestionResponse>(res, 'Failed to fetch current question')
+  },
+
+  /** Presenting student ends the demo phase — sets demo_completed_at so every
+   * participant's UI moves on to the AI viva. */
+  async endDemo(sessionId: string): Promise<void> {
+    const res = await apiFetch(SESSION_API.endDemo(sessionId), { method: 'POST' })
+
+    await readJson<unknown>(res, 'Failed to end the demo')
   },
 }

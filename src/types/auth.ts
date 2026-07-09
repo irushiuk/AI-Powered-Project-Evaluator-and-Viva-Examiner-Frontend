@@ -7,10 +7,9 @@ export type AuthUser = {
   role: UserRole
 }
 
+// Tokens are delivered as HttpOnly cookies, so the body only carries the user.
 export type LoginResponse = {
   user: AuthUser
-  access: string
-  refresh: string
 }
 
 export type RegisterStudentRequest = {

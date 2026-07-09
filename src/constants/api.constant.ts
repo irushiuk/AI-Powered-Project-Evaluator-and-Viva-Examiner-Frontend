@@ -1,4 +1,14 @@
-export const API_BASE = (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_API_BASE : undefined) ?? '/api'
+// The browser talks to the API through a same-origin path (proxied in dev,
+// or the api.* subdomain in prod) so HttpOnly cookies are sent with
+// credentials: 'include'. Server-side code (SSR / server actions) can't use a
+// relative URL, so it uses an absolute internal base instead.
+const CLIENT_API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api'
+const SERVER_API_BASE =
+  process.env.INTERNAL_API_BASE ||
+  process.env.NEXT_PUBLIC_API_BASE ||
+  'http://127.0.0.1:8000/api'
+
+export const API_BASE = typeof window === 'undefined' ? SERVER_API_BASE : CLIENT_API_BASE
 
 export const AUTH_API = {
   login: `${API_BASE}/auth/login/`,
@@ -96,6 +106,7 @@ export const SESSION_API = {
   myStatus: (status?: string) =>
     `${API_BASE}/sessions/my-status/${status ? `?status=${encodeURIComponent(status)}` : ''}`,
   mySession: (projectId: string) => `${API_BASE}/projects/${projectId}/sessions/my-session/`,
+  endDemo: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/end-demo/`,
 }
  
 export default {

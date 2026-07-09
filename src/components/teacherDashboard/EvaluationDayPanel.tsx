@@ -390,8 +390,10 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
   return (
     <div className="max-w-2xl mx-auto space-y-5">
 
-      {/* Video Call Room */}
-      {(session.status === "in_progress" || session.status === "demo_completed") && (
+      {/* Video Call Room — available as soon as the panel is open so the
+          examiner can join the call and ask questions right away, regardless
+          of whether the student runs a demo first. */}
+      {!isCompleted && (
         <>
           <AgoraVideoRoom sessionId={session.session_id} />
           <LiveInterjectionCard sessionId={session.session_id} />
