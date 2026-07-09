@@ -54,6 +54,20 @@ const STATUS_META: Record<
     bg: "bg-gray-50",
     text: "text-gray-600",
   },
+  ongoing: {
+    label: "Ongoing (No students present)",
+    dot: "bg-amber-400 animate-pulse",
+    ring: "ring-amber-200",
+    bg: "bg-amber-50",
+    text: "text-amber-700",
+  },
+  live: {
+    label: "Live (Students present)",
+    dot: "bg-green-500 animate-pulse",
+    ring: "ring-green-200",
+    bg: "bg-green-50",
+    text: "text-green-700",
+  },
   demo_in_progress: {
     label: "Demo in Progress",
     dot: "bg-amber-400 animate-pulse",

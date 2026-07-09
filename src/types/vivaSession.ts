@@ -35,6 +35,8 @@ export type SubmitVivaAnswerResponse = {
 
 export type SessionPhase =
   | 'scheduled'
+  | 'ongoing'
+  | 'live'
   | 'demo_in_progress'
   | 'viva_in_progress'
   | 'completed'

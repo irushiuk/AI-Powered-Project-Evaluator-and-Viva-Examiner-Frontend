@@ -40,16 +40,22 @@ function getStatusConfig(status: SessionStatusFilter) {
   }
 }
 
-function getFilterFromApiStatus(status: StudentSessionSummary['status']): SessionStatusFilter {
+function getFilterFromApiStatus(status: StudentSessionSummary['status'], phase?: string): SessionStatusFilter {
+  if (phase === 'completed') return 'completed'
+  if (phase === 'ongoing' || phase === 'live' || phase === 'demo_in_progress' || phase === 'viva_in_progress') return 'ongoing'
   if (status === 'in_progress') return 'ongoing'
   if (status === 'completed') return 'completed'
   return 'upcoming'
 }
 
 function SessionCard({ session }: { session: StudentSessionSummary }) {
-  const status = getFilterFromApiStatus(session.status)
+  const status = getFilterFromApiStatus(session.status, session.phase)
   const config = getStatusConfig(status)
   const start = formatDateTime(session.scheduled_start)
+
+  const isLive = session.phase === 'live' || session.phase === 'demo_in_progress' || session.phase === 'viva_in_progress'
+  const badgeLabel = isLive ? 'Live' : (session.phase === 'ongoing' ? 'Ongoing' : config.label)
+  const badgeVariant = isLive ? 'default' : config.variant
 
   return (
     <Card className="flex h-full flex-col border-border/70 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
@@ -61,7 +67,7 @@ function SessionCard({ session }: { session: StudentSessionSummary }) {
               {session.group_name ? `Group: ${session.group_name}` : 'Individual evaluation session'}
             </CardDescription>
           </div>
-          <Badge variant={config.variant}>{config.label}</Badge>
+          <Badge variant={badgeVariant}>{badgeLabel}</Badge>
         </div>
       </CardHeader>
 

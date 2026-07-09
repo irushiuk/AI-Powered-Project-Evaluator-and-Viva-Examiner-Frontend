@@ -6,9 +6,10 @@ import type { StudentSession } from './sessionTypes'
 
 type SessionUpcomingViewProps = {
   session: StudentSession
+  serverTime?: string
 }
 
-export function SessionUpcomingView({ session }: SessionUpcomingViewProps) {
+export function SessionUpcomingView({ session, serverTime }: SessionUpcomingViewProps) {
   return (
     <div className="space-y-6">
       <Card className="border-2 border-primary/20 bg-primary/5">
@@ -19,7 +20,7 @@ export function SessionUpcomingView({ session }: SessionUpcomingViewProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <SessionCountdownGate sessionId={session.id} startsAt={session.startsAt} />
+          <SessionCountdownGate sessionId={session.id} startsAt={session.startsAt} serverTime={serverTime} />
         </CardContent>
       </Card>
 

@@ -271,10 +271,31 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
     }
   }, [loadFirstQuestion, sessionId])
 
+  // Presence heartbeat ping loop
+  useEffect(() => {
+    if (hasFinished) return
+    const sendPing = async () => {
+      try {
+        await vivaSessionService.sendPresencePing(sessionId)
+      } catch {
+        // ignore transient errors
+      }
+    }
+    sendPing() // initial send
+    const id = setInterval(sendPing, 10000)
+    return () => clearInterval(id)
+  }, [sessionId, hasFinished])
+
   // While in the lobby or demo, poll the phase so a group member's screen
   // follows when a teammate starts the demo, or ends it and the viva begins.
   useEffect(() => {
-    if (phase !== 'scheduled' && phase !== 'demo_in_progress') return
+    if (
+      phase !== 'scheduled' &&
+      phase !== 'ongoing' &&
+      phase !== 'live' &&
+      phase !== 'demo_in_progress'
+    )
+      return
     const id = window.setInterval(async () => {
       try {
         const status = await vivaSessionService.getSessionStatus(sessionId)
@@ -667,92 +688,102 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
     )
   }
 
-  // ─── Lobby: session scheduled, waiting for the student to start ───
-  // The student joins the room (camera on) and starts the session themselves.
-  // "Start Demo" appears only when the examiner enabled a demo for this
-  // session; otherwise it's a single "Start Viva".
-  if (phase === 'scheduled') {
+  // ─── Lobby: session scheduled / ongoing / live ───
+  // The students join the Agora room and can see/talk to each other.
+  // The control panel is loaded as a sidebar letting anyone start.
+  if (phase === 'scheduled' || phase === 'ongoing' || phase === 'live') {
     return (
-      <div className="relative h-full w-full">
-        <AgoraVideoRoom
-          sessionId={sessionId}
-          className="rounded-none border-0"
-          onLocalTracks={handleLocalTracks}
-          remoteJoinNotice="Examiner joining now"
-          overlayContent={
-            <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-              <div className="w-full max-w-md space-y-4 rounded-2xl border border-slate-700 bg-slate-900/95 p-6 text-center shadow-2xl">
-                <Monitor className="mx-auto h-10 w-10 text-blue-400" />
-                <h2 className="text-xl font-bold text-slate-100">
-                  {demoEnabled ? 'Ready to present?' : 'Ready to begin?'}
-                </h2>
-                <p className="text-sm text-slate-400">
-                  {demoEnabled
-                    ? 'Start your demo to present your work (screen share). Your examiner can join once you begin. When you’re done presenting, you’ll start the viva.'
-                    : 'Start your viva when you’re ready. Your examiner can join once you begin.'}
-                </p>
-                <Button
-                  onClick={demoEnabled ? handleStartDemo : handleStartViva}
-                  disabled={startingSession}
-                  size="lg"
-                  className="w-full bg-blue-600 font-semibold text-white hover:bg-blue-700"
-                >
-                  {startingSession ? (
-                    <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Starting…</>
-                  ) : demoEnabled ? (
-                    <><Monitor className="mr-2 h-5 w-5" /> Start Demo</>
-                  ) : (
-                    <><ChevronRight className="mr-2 h-5 w-5" /> Start Viva</>
-                  )}
-                </Button>
-              </div>
-            </div>
-          }
-        />
+      <div className="relative h-full w-full flex bg-slate-950">
+        <div className="flex-1 relative">
+          <AgoraVideoRoom
+            sessionId={sessionId}
+            className="rounded-none border-0"
+            onLocalTracks={handleLocalTracks}
+            remoteJoinNotice="Examiner joining now"
+          />
+        </div>
+        
+        {/* Side control panel */}
+        <div className="w-[360px] border-l border-slate-800/80 bg-slate-900/95 p-6 flex flex-col justify-center space-y-6 text-slate-100 z-30 shadow-2xl">
+          <div className="text-center space-y-3">
+            <Monitor className="mx-auto h-12 w-12 text-blue-400 animate-pulse" />
+            <h3 className="text-lg font-bold text-slate-100">Lobby Room</h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              {phase === 'ongoing'
+                ? 'Scheduled time has arrived. Waiting for participants to join...'
+                : 'At least one student is active in the room. You can start the evaluation below.'}
+            </p>
+          </div>
+          
+          <div className="space-y-3">
+            {demoEnabled ? (
+              <Button
+                onClick={handleStartDemo}
+                disabled={startingSession}
+                className="w-full bg-blue-600 font-semibold text-white hover:bg-blue-700 h-11"
+              >
+                {startingSession ? (
+                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Starting Demo...</>
+                ) : (
+                  <><Monitor className="mr-2 h-5 w-5" /> Start Demo</>
+                )}
+              </Button>
+            ) : (
+              <Button
+                onClick={handleStartViva}
+                disabled={startingSession}
+                className="w-full bg-blue-600 font-semibold text-white hover:bg-blue-700 h-11"
+              >
+                {startingSession ? (
+                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Starting...</>
+                ) : (
+                  <><ChevronRight className="mr-2 h-5 w-5" /> Start Viva</>
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
     )
   }
 
-  // ─── Demo phase: students present (screen share); AI viva not started yet ──
-  // Everyone joins the room; the presenter shares their screen (not everyone
-  // has to). Only the student who is sharing sees the "End Demo" button.
+  // ─── Demo phase: students present (screen share) ───
+  // The control panel is loaded as a sidebar so any student can end the demo.
   if (phase === 'demo_in_progress') {
     return (
-      <div className="relative h-full w-full">
-        <AgoraVideoRoom
-          sessionId={sessionId}
-          className="rounded-none border-0"
-          onLocalTracks={handleLocalTracks}
-          onScreenShareChange={setIsSharingScreen}
-          remoteJoinNotice="Examiner joining now"
-          overlayContent={
-            <>
-              <div className="absolute left-1/2 top-4 z-30 -translate-x-1/2">
-                <div className="flex items-center gap-2 rounded-full bg-amber-500/90 px-4 py-2 text-sm font-medium text-slate-950 shadow-lg">
-                  <Monitor className="h-4 w-4" />
-                  Demo phase — the presenter can use “Share Screen”. Your viva
-                  begins once the demo ends.
-                </div>
-              </div>
-              {isSharingScreen && (
-                <div className="absolute bottom-24 left-1/2 z-30 -translate-x-1/2">
-                  <Button
-                    onClick={handleEndDemo}
-                    disabled={endingDemo}
-                    size="lg"
-                    className="bg-blue-600 font-semibold text-white shadow-xl hover:bg-blue-700"
-                  >
-                    {endingDemo ? (
-                      <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Ending…</>
-                    ) : (
-                      <><CheckCircle2 className="mr-2 h-5 w-5" /> End Demo &amp; Start Viva</>
-                    )}
-                  </Button>
-                </div>
-              )}
-            </>
-          }
-        />
+      <div className="relative h-full w-full flex bg-slate-950">
+        <div className="flex-1 relative">
+          <AgoraVideoRoom
+            sessionId={sessionId}
+            className="rounded-none border-0"
+            onLocalTracks={handleLocalTracks}
+            onScreenShareChange={setIsSharingScreen}
+            remoteJoinNotice="Examiner joining now"
+          />
+        </div>
+        
+        {/* Side control panel */}
+        <div className="w-[360px] border-l border-slate-800/80 bg-slate-900/95 p-6 flex flex-col justify-center space-y-6 text-slate-100 z-30 shadow-2xl">
+          <div className="text-center space-y-3">
+            <Monitor className="mx-auto h-12 w-12 text-amber-400" />
+            <h3 className="text-lg font-bold text-slate-100">Presentation Demo</h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Use "Share Screen" to present. Any student in the project group can trigger the transition to the viva.
+            </p>
+          </div>
+          
+          <Button
+            onClick={handleEndDemo}
+            disabled={endingDemo}
+            className="w-full bg-blue-600 font-semibold text-white hover:bg-blue-700 shadow-xl h-11"
+          >
+            {endingDemo ? (
+              <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Transitioning...</>
+            ) : (
+              <><CheckCircle2 className="mr-2 h-5 w-5" /> End Demo &amp; Start Viva</>
+            )}
+          </Button>
+        </div>
       </div>
     )
   }
