@@ -50,6 +50,8 @@ export type StudentSession = {
   lecturer: string
   date: string
   time: string
+  /** Raw ISO scheduled start (UTC-aware) — use this for time math, not date/time. */
+  startsAt?: string
   status: SessionStatus
   description: string
   rubrics?: RubricCategory[]

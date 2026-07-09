@@ -64,6 +64,20 @@ export const vivaSessionService = {
     return readJson<CurrentQuestionResponse>(res, 'Failed to fetch current question')
   },
 
+  /** Student starts the demo/presentation phase (scheduled → demo in progress). */
+  async startDemo(sessionId: string): Promise<void> {
+    const res = await apiFetch(SESSION_API.startDemo(sessionId), { method: 'POST' })
+
+    await readJson<unknown>(res, 'Failed to start the demo')
+  },
+
+  /** Student starts the viva directly, no demo (scheduled → viva in progress). */
+  async startViva(sessionId: string): Promise<void> {
+    const res = await apiFetch(SESSION_API.startViva(sessionId), { method: 'POST' })
+
+    await readJson<unknown>(res, 'Failed to start the viva')
+  },
+
   /** Presenting student ends the demo phase — sets demo_completed_at so every
    * participant's UI moves on to the AI viva. */
   async endDemo(sessionId: string): Promise<void> {
