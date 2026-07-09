@@ -106,6 +106,8 @@ export const SESSION_API = {
   myStatus: (status?: string) =>
     `${API_BASE}/sessions/my-status/${status ? `?status=${encodeURIComponent(status)}` : ''}`,
   mySession: (projectId: string) => `${API_BASE}/projects/${projectId}/sessions/my-session/`,
+  startDemo: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/student/start-demo/`,
+  startViva: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/student/start-viva/`,
   endDemo: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/end-demo/`,
 }
  

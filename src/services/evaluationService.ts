@@ -9,10 +9,11 @@ import { PROJECTS_API, SESSIONS_API } from '@/constants/api.constant'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+// Fine-grained lifecycle phase (mirrors the backend `phase` property).
 export type EvalSessionStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'demo_completed'
+  | 'scheduled'
+  | 'demo_in_progress'
+  | 'viva_in_progress'
   | 'completed'
 
 export interface ActiveSession {
@@ -27,7 +28,8 @@ export interface ActiveSession {
   demo_enabled: boolean
   demo_completed_at: string | null
   location_room: string
-  status: EvalSessionStatus
+  status: 'scheduled' | 'in_progress' | 'completed'
+  phase: EvalSessionStatus
 }
 
 export interface SessionPanelOpenResponse {

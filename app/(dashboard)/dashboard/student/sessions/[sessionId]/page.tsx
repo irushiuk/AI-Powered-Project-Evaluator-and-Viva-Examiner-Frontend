@@ -64,6 +64,7 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
         hour: 'numeric',
         minute: '2-digit',
       }),
+      startsAt: sessionData.scheduled_start,
       status:
         sessionData.status === 'scheduled'
           ? 'upcoming'

@@ -17,8 +17,6 @@ import { toast } from "sonner"
 import {
   openSessionPanel,
   getActiveSession,
-  startDemo,
-  completeDemo,
   endViva,
   ActiveSession,
   EvalSessionStatus,
@@ -49,21 +47,21 @@ const STATUS_META: Record<
   EvalSessionStatus,
   { label: string; dot: string; ring: string; bg: string; text: string }
 > = {
-  pending: {
-    label: "Pending",
+  scheduled: {
+    label: "Scheduled",
     dot: "bg-gray-400",
     ring: "ring-gray-200",
     bg: "bg-gray-50",
     text: "text-gray-600",
   },
-  in_progress: {
+  demo_in_progress: {
     label: "Demo in Progress",
     dot: "bg-amber-400 animate-pulse",
     ring: "ring-amber-200",
     bg: "bg-amber-50",
     text: "text-amber-700",
   },
-  demo_completed: {
+  viva_in_progress: {
     label: "Viva in Progress",
     dot: "bg-blue-500 animate-pulse",
     ring: "ring-blue-200",
@@ -80,7 +78,7 @@ const STATUS_META: Record<
 }
 
 function StatusBadge({ status }: { status: EvalSessionStatus }) {
-  const m = STATUS_META[status]
+  const m = STATUS_META[status] ?? STATUS_META.scheduled
   return (
     <span
       className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ${m.ring} ${m.bg} ${m.text}`}
@@ -227,8 +225,10 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
   // ── Action loading guards ───────────────────────────────────────────────────
   const [busy, setBusy] = useState(false)
 
+  // ── Whether the examiner has joined the live call for the active session ─────
+  const [joinedSessionId, setJoinedSessionId] = useState<string | null>(null)
+
   // ── Confirm modals ──────────────────────────────────────────────────────────
-  const [confirmingDemo, setConfirmingDemo] = useState(false)
   const [confirmingViva, setConfirmingViva] = useState(false)
 
   // ── Viva end uploads ────────────────────────────────────────────────────────
@@ -273,35 +273,6 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
     } finally {
       setOpening(false)
       setLoadingSession(false)
-    }
-  }
-
-  async function handleStartDemo() {
-    if (!session) return
-    setBusy(true)
-    try {
-      const updated = await startDemo(session.session_id)
-      setSession(updated)
-      toast.success("Demo started")
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to start demo")
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function handleCompleteDemo() {
-    if (!session) return
-    setBusy(true)
-    setConfirmingDemo(false)
-    try {
-      const updated = await completeDemo(session.session_id)
-      setSession(updated)
-      toast.success("Demo marked complete — viva phase started")
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to complete demo")
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -385,15 +356,19 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
 
   // ─── render: active session card ──────────────────────────────────────────
 
-  const isCompleted = session.status === "completed"
+  const isCompleted = session.phase === "completed"
+  // The examiner can only be in the live call once the student has actually
+  // started (demo or viva phase). They join explicitly via the Join button.
+  const canJoin =
+    session.phase === "demo_in_progress" || session.phase === "viva_in_progress"
+  const hasJoined = joinedSessionId === session.session_id && canJoin
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">
 
-      {/* Video Call Room — available as soon as the panel is open so the
-          examiner can join the call and ask questions right away, regardless
-          of whether the student runs a demo first. */}
-      {!isCompleted && (
+      {/* Video Call Room — only rendered after the examiner clicks Join, and
+          only once the student has moved the session to demo/viva. */}
+      {hasJoined && (
         <>
           <AgoraVideoRoom sessionId={session.session_id} />
           <LiveInterjectionCard sessionId={session.session_id} />
@@ -420,7 +395,7 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
               </p>
             )}
           </div>
-          <StatusBadge status={session.status} />
+          <StatusBadge status={session.phase} />
         </div>
 
         {/* Session meta */}
@@ -445,16 +420,34 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
         </div>
 
         {/* Timer strip */}
-        {session.status === "in_progress" && (
+        {session.phase === "demo_in_progress" && (
           <div className="px-6 py-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
             <p className="text-xs font-medium text-amber-700">⏱ Demo elapsed</p>
             <ElapsedTicker from={session.actual_start} />
           </div>
         )}
-        {session.status === "demo_completed" && (
+        {session.phase === "viva_in_progress" && (
           <div className="px-6 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
             <p className="text-xs font-medium text-blue-700">⏱ Viva elapsed</p>
-            <ElapsedTicker from={session.demo_completed_at} />
+            <ElapsedTicker from={session.demo_completed_at ?? session.actual_start} />
+          </div>
+        )}
+
+        {/* Join banner — the student is live; the examiner joins explicitly */}
+        {canJoin && !hasJoined && (
+          <div className="px-6 py-4 bg-indigo-50 border-b border-indigo-100 flex items-center justify-between flex-wrap gap-3">
+            <p className="text-sm text-indigo-800">
+              {session.phase === "demo_in_progress"
+                ? "The student has started their demo."
+                : "The viva is in progress."}{" "}
+              Join the live call to watch and ask questions.
+            </p>
+            <button
+              onClick={() => setJoinedSessionId(session.session_id)}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition shadow-sm"
+            >
+              🎥 Join Session
+            </button>
           </div>
         )}
 
@@ -478,33 +471,12 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
                 Next student →
               </button>
             </div>
-          ) : session.status === "pending" ? (
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <p className="text-sm text-gray-500">
-                Student is present — start their demo when ready.
-              </p>
-              <button
-                disabled={busy}
-                onClick={handleStartDemo}
-                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold transition disabled:opacity-60 shadow-sm"
-              >
-                {busy ? "Starting…" : "▶ Start Demo"}
-              </button>
-            </div>
-          ) : session.status === "in_progress" ? (
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <p className="text-sm text-gray-500">
-                Demo is running. Mark complete when the student finishes.
-              </p>
-              <button
-                disabled={busy}
-                onClick={() => setConfirmingDemo(true)}
-                className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition disabled:opacity-60 shadow-sm"
-              >
-                {busy ? "Saving…" : "✅ Complete Demo"}
-              </button>
-            </div>
-          ) : session.status === "demo_completed" ? (
+          ) : session.phase === "demo_in_progress" ? (
+            <p className="text-sm text-gray-500">
+              The student is presenting their demo. The viva starts when they end
+              the demo — you’ll see the status update here.
+            </p>
+          ) : session.phase === "viva_in_progress" ? (
             <div className="space-y-4">
               <p className="text-sm text-gray-500">
                 Viva is in progress. Upload recordings (optional) and end when done.
@@ -551,18 +523,6 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
             refresh now
           </button>
         </p>
-      )}
-
-      {/* Confirm: complete demo */}
-      {confirmingDemo && (
-        <ConfirmModal
-          title="Mark demo as complete?"
-          description="This will end the demo phase and immediately start the viva for this student."
-          confirmLabel="Complete Demo"
-          confirmClass="bg-blue-600 hover:bg-blue-700"
-          onConfirm={handleCompleteDemo}
-          onCancel={() => setConfirmingDemo(false)}
-        />
       )}
 
       {/* Confirm: end viva */}

@@ -1,6 +1,6 @@
 import { Calendar } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Countdown } from './Countdown'
+import { SessionCountdownGate } from './SessionCountdownGate'
 import { RubricCard } from './RubricCard'
 import type { StudentSession } from './sessionTypes'
 
@@ -19,12 +19,7 @@ export function SessionUpcomingView({ session }: SessionUpcomingViewProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-lg">
-            <Countdown targetDate={session.date} targetTime={session.time} />
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Session not started yet. Check back closer to the scheduled time.
-          </p>
+          <SessionCountdownGate sessionId={session.id} startsAt={session.startsAt} />
         </CardContent>
       </Card>
 
