@@ -12,6 +12,8 @@ import { PROJECTS_API, SESSIONS_API } from '@/constants/api.constant'
 // Fine-grained lifecycle phase (mirrors the backend `phase` property).
 export type EvalSessionStatus =
   | 'scheduled'
+  | 'ongoing'
+  | 'live'
   | 'demo_in_progress'
   | 'viva_in_progress'
   | 'completed'

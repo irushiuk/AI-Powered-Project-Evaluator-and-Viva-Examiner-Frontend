@@ -10,6 +10,7 @@ export type StudentSessionSummary = {
   scheduled_end: string
   location_room: string | null
   status: ApiSessionStatus
+  phase?: string
   group_name?: string | null
   demo_completed_at?: string | null
 }

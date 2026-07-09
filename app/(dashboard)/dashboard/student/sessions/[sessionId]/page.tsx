@@ -40,6 +40,7 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
   let session: StudentSession | null = null
   let results: SessionResults | null = null
   let error: string | null = null
+  const serverTime = new Date().toISOString()
 
   try {
     const sessionData = await serverSessionService.getMySession(projectId)
@@ -109,7 +110,7 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
       <SessionHeaderCard session={session} />
 
       <div className="mt-8">
-        {session.status === 'upcoming' && <SessionUpcomingView session={session} />}
+        {session.status === 'upcoming' && <SessionUpcomingView session={session} serverTime={serverTime} />}
         {session.status === 'ongoing' && <SessionOngoingView sessionId={sessionId} rubrics={session.rubrics} />}
         {session.status === 'completed' && session.results && <SessionCompletedView results={session.results} />}
         {session.status === 'completed' && !session.results && (

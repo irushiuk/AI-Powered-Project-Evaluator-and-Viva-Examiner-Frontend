@@ -85,4 +85,13 @@ export const vivaSessionService = {
 
     await readJson<unknown>(res, 'Failed to end the demo')
   },
+
+  /** Sends a presence ping heartbeat to mark the current student as active in the Agora room. */
+  async sendPresencePing(sessionId: string): Promise<any> {
+    const res = await apiFetch(`/sessions/${sessionId}/presence/`, {
+      method: 'POST',
+    })
+
+    return readJson<any>(res, 'Failed to send presence heartbeat')
+  },
 }
