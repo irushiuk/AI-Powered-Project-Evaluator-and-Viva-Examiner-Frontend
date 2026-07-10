@@ -76,6 +76,17 @@ export function Navbar() {
               </DropdownMenu.Root>
 
               {/* Profile Dropdown */}
+              {user && (
+                <div className="hidden flex-col items-end text-right md:flex select-none mr-1">
+                  <span className="text-sm font-semibold text-gray-900 leading-tight">
+                    {user.full_name || 'User'}
+                  </span>
+                  <span className="text-xs text-gray-500 font-normal leading-normal">
+                    {user.email}
+                  </span>
+                </div>
+              )}
+
               <DropdownMenu.Root open={profileOpen} onOpenChange={setProfileOpen}>
                 <DropdownMenu.Trigger asChild>
                   <Button
