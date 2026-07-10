@@ -10,6 +10,8 @@ import {
   LogOut,
   Settings,
   User,
+  MoreVertical,
+  Menu,
 } from 'lucide-react'
 import { useState } from 'react'
 import { usePathname } from 'next/navigation'
@@ -117,6 +119,17 @@ export function DashboardNavbar() {
               </DropdownMenu.Portal>
             </DropdownMenu.Root>
 
+            {user && (
+              <div className="hidden flex-col items-end text-right md:flex select-none mr-1">
+                <span className="text-sm font-semibold text-gray-900 leading-tight">
+                  {user.full_name || 'User'}
+                </span>
+                <span className="text-xs text-gray-500 font-normal leading-normal">
+                  {user.email}
+                </span>
+              </div>
+            )}
+
             <DropdownMenu.Root open={profileOpen} onOpenChange={setProfileOpen}>
               <DropdownMenu.Trigger asChild>
                 <Button
@@ -159,6 +172,85 @@ export function DashboardNavbar() {
                 </DropdownMenu.Content>
               </DropdownMenu.Portal>
             </DropdownMenu.Root>
+
+            {/* Mobile Menu (hidden on medium screens and up, positioned on the far-right end) */}
+            <div className="flex md:hidden">
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <Button
+                    size="icon"
+                    className="rounded-full bg-transparent text-gray-700 shadow-none hover:bg-gray-100 hover:text-gray-900 focus-visible:bg-gray-100"
+                    aria-label="Open navigation menu"
+                  >
+                    <Menu className="h-6 w-6" />
+                  </Button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content
+                    align="end"
+                    className="z-50 mt-2 w-56 rounded-md border border-border bg-white p-1 text-gray-900 shadow-lg"
+                  >
+                    {showStudentNavLinks && (
+                      <>
+                        <DropdownMenu.Item asChild>
+                          <Link
+                            href="/dashboard/student/projects/explore"
+                            className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm font-semibold outline-none transition hover:bg-gray-100 focus:bg-gray-100"
+                          >
+                            All Projects
+                          </Link>
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item asChild>
+                          <Link
+                            href="/dashboard/student/projects"
+                            className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm font-semibold outline-none transition hover:bg-gray-100 focus:bg-gray-100"
+                          >
+                            My Projects
+                          </Link>
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item asChild>
+                          <Link
+                            href="/dashboard/student/sessions"
+                            className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm font-semibold outline-none transition hover:bg-gray-100 focus:bg-gray-100"
+                          >
+                            My Sessions
+                          </Link>
+                        </DropdownMenu.Item>
+                      </>
+                    )}
+
+                    {showTeacherNavLinks && (
+                      <>
+                        <DropdownMenu.Item asChild>
+                          <Link
+                            href="/dashboard/teacher"
+                            className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm font-semibold outline-none transition hover:bg-gray-100 focus:bg-gray-100"
+                          >
+                            Dashboard
+                          </Link>
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item asChild>
+                          <Link
+                            href="/dashboard/teacher/projects"
+                            className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm font-semibold outline-none transition hover:bg-gray-100 focus:bg-gray-100"
+                          >
+                            Projects
+                          </Link>
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item asChild>
+                          <Link
+                            href="/dashboard/teacher/submissions"
+                            className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-sm font-semibold outline-none transition hover:bg-gray-100 focus:bg-gray-100"
+                          >
+                            Submissions
+                          </Link>
+                        </DropdownMenu.Item>
+                      </>
+                    )}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            </div>
           </div>
         </div>
       </div>
