@@ -9,8 +9,9 @@ export default async function ProjectDetailPage({
   const resolvedParams = await params
   
   // Fetch data server-side
-  const allProjects = await serverProjectService.getMyProjects().catch(() => [])
-  const project = allProjects.find((p) => p.id === resolvedParams.projectId) || null
+  const projectsData = await serverProjectService.getMyProjects().catch(() => ({ count: 0, results: [] }))
+  const projectList = Array.isArray(projectsData) ? projectsData : (projectsData.results || [])
+  const project = projectList.find((p) => p.id === resolvedParams.projectId) || null
   
   let submissionData = null
   if (project?.submission_status === 'submitted') {
