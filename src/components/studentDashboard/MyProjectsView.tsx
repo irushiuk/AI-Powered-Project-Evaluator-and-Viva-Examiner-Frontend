@@ -1,13 +1,13 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter, usePathname } from 'next/navigation'
 import {
   Calendar,
   Clock,
   Users,
   UserCircle,
   Upload,
-  CheckCircle2,
   ArrowRight,
   FileText,
 } from 'lucide-react'
@@ -20,6 +20,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Pagination } from '@/components/ui/pagination'
 
 import type { EnrolledProject } from '@/types/project'
 
@@ -39,12 +40,29 @@ function getDeadlineLabel(deadline: string | null) {
     year: 'numeric',
   })
 }
-// Hi test
 
-export function MyProjectsView({ initialProjects = [] }: { initialProjects?: EnrolledProject[] }) {
-  const projects = initialProjects
+type MyProjectsViewProps = {
+  initialData: {
+    count: number
+    results: EnrolledProject[]
+  }
+  currentPage: number
+}
 
-  if (projects.length === 0) {
+export function MyProjectsView({ initialData, currentPage }: MyProjectsViewProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+
+  const projects = initialData.results
+  const totalCount = initialData.count
+
+  const handlePageChange = (page: number) => {
+    const params = new URLSearchParams(window.location.search)
+    params.set('page', page.toString())
+    router.push(`${pathname}?${params.toString()}`)
+  }
+
+  if (totalCount === 0) {
     return (
       <div className="space-y-6">
         <div className="space-y-2">
@@ -183,6 +201,12 @@ export function MyProjectsView({ initialProjects = [] }: { initialProjects?: Enr
           )
         })}
       </div>
+
+      <Pagination
+        currentPage={currentPage}
+        totalPages={Math.ceil(totalCount / 9)}
+        onPageChange={handlePageChange}
+      />
     </div>
   )
 }

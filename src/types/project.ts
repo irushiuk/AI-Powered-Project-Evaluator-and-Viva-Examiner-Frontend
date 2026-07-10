@@ -5,7 +5,6 @@ export type AvailableProject = {
   is_group_project: boolean
   submission_deadline: string | null
   lead_examiner_name: string | null
-  enrolled: boolean
 }
 
 export type SessionDetails = {

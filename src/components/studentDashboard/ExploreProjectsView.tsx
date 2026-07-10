@@ -1,13 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import {
   Search,
   Calendar,
   User,
   Users,
   UserCircle,
-  CheckCircle2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { Pagination } from '@/components/ui/pagination'
 
 import { toast } from 'sonner'
 import type { AvailableProject } from '@/types/project'
@@ -60,12 +61,33 @@ function getDeadlineText(deadline: string | null) {
   return formatted
 }
 
-type ProjectFilter = 'all' | 'open' | 'enrolled'
+type ProjectFilter = 'all' | 'individual' | 'group'
 
-export function ExploreProjectsView({ initialProjects = [] }: { initialProjects?: AvailableProject[] }) {
-  const [projects, setProjects] = useState<AvailableProject[]>(initialProjects)
-  const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<ProjectFilter>('all')
+type ExploreProjectsViewProps = {
+  initialData: {
+    count: number
+    results: AvailableProject[]
+  }
+  currentPage: number
+  initialFilter: ProjectFilter
+  initialSearch: string
+}
+
+export function ExploreProjectsView({
+  initialData,
+  currentPage,
+  initialFilter,
+  initialSearch,
+}: ExploreProjectsViewProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+
+  const [projects, setProjects] = useState<AvailableProject[]>(initialData.results)
+  const [totalCount, setTotalCount] = useState(initialData.count)
+  
+  const [searchVal, setSearchVal] = useState(initialSearch)
+  const [filterVal, setFilterVal] = useState<ProjectFilter>(initialFilter)
+
   const [pendingProject, setPendingProject] =
     useState<AvailableProject | null>(null)
   const [groupNumber, setGroupNumber] = useState('')
@@ -74,27 +96,51 @@ export function ExploreProjectsView({ initialProjects = [] }: { initialProjects?
   const [memberEmails, setMemberEmails] = useState<string[]>([''])
   const [isEnrolling, setIsEnrolling] = useState(false)
 
-  const filteredProjects = useMemo(() => {
-    const term = search.trim().toLowerCase()
+  // Sync state if props change (e.g. server-side results update)
+  useEffect(() => {
+    setProjects(initialData.results)
+    setTotalCount(initialData.count)
+  }, [initialData])
 
-    return projects.filter((p) => {
-      const matchesSearch =
-        !term ||
-        p.project_name.toLowerCase().includes(term) ||
-        (p.description ?? '').toLowerCase().includes(term) ||
-        (p.lead_examiner_name ?? '').toLowerCase().includes(term)
+  // Debounced search router push
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      // Only navigate if search differs from URL state
+      const params = new URLSearchParams(window.location.search)
+      const currentSearch = params.get('search') || ''
+      if (searchVal.trim() !== currentSearch) {
+        if (searchVal.trim()) {
+          params.set('search', searchVal.trim())
+        } else {
+          params.delete('search')
+        }
+        params.set('page', '1') // reset page
+        router.push(`${pathname}?${params.toString()}`)
+      }
+    }, 400)
 
-      const matchesFilter =
-        filter === 'all' ||
-        (filter === 'open' && !p.enrolled) ||
-        (filter === 'enrolled' && p.enrolled)
+    return () => clearTimeout(delayDebounce)
+  }, [searchVal])
 
-      return matchesSearch && matchesFilter
-    })
-  }, [filter, search, projects])
+  const handleFilterChange = (val: ProjectFilter) => {
+    setFilterVal(val)
+    const params = new URLSearchParams(window.location.search)
+    if (val !== 'all') {
+      params.set('type', val)
+    } else {
+      params.delete('type')
+    }
+    params.set('page', '1') // reset page
+    router.push(`${pathname}?${params.toString()}`)
+  }
+
+  const handlePageChange = (page: number) => {
+    const params = new URLSearchParams(window.location.search)
+    params.set('page', page.toString())
+    router.push(`${pathname}?${params.toString()}`)
+  }
 
   const handleEnrollClick = (project: AvailableProject) => {
-    if (project.enrolled) return
     setPendingProject(project)
     setGroupNumber('')
     setMemberEmails([''])
@@ -122,12 +168,13 @@ export function ExploreProjectsView({ initialProjects = [] }: { initialProjects?
 
       toast.success('Successfully enrolled in project!')
       
-      // Update local state to reflect enrollment
+      // Remove the enrolled project from the explore list
       setProjects((current) =>
-        current.map((p) =>
-          p.id === pendingProject.id ? { ...p, enrolled: true } : p,
-        ),
+        current.filter((p) => p.id !== pendingProject.id),
       )
+      // Decrease total count locally
+      setTotalCount((c) => Math.max(0, c - 1))
+      
       setPendingProject(null)
       setGroupNumber('')
       setMemberEmails([''])
@@ -140,39 +187,31 @@ export function ExploreProjectsView({ initialProjects = [] }: { initialProjects?
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">
-          Explore Projects
-        </h1>
-        <p className="text-muted-foreground">
-          Browse available projects, and enroll in the ones you want to work on.
-        </p>
-      </div>
-
+     
       {/* Search & Filter */}
       <Card className="border-border/70 bg-card shadow-sm">
-        <CardContent className="pt-6">
+        <CardContent className="pt-0">
           <div className="grid gap-4 md:grid-cols-[1.5fr_0.8fr] lg:grid-cols-[2fr_0.9fr]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchVal}
+                onChange={(e) => setSearchVal(e.target.value)}
                 placeholder="Search projects, examiners..."
                 className="pl-9"
               />
             </div>
             <Select
-              value={filter}
-              onValueChange={(v) => setFilter(v as ProjectFilter)}
+              value={filterVal}
+              onValueChange={(v) => handleFilterChange(v as ProjectFilter)}
             >
               <SelectTrigger className="w-full bg-background">
                 <SelectValue placeholder="Filter projects" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Projects</SelectItem>
-                <SelectItem value="open">Open Projects</SelectItem>
-                <SelectItem value="enrolled">My Enrolled</SelectItem>
+                <SelectItem value="individual">Individual</SelectItem>
+                <SelectItem value="group">Group</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -180,81 +219,79 @@ export function ExploreProjectsView({ initialProjects = [] }: { initialProjects?
       </Card>
 
       {/* Project Cards */}
-      {filteredProjects.length === 0 ? (
+      {projects.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             No projects match your search or filter.
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {filteredProjects.map((project) => (
-            <Card
-              key={project.id}
-              className="flex h-full flex-col border-border/70 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-            >
-              <CardHeader className="space-y-3 pb-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <CardTitle className="text-lg leading-snug">
-                      {project.project_name}
-                    </CardTitle>
-                    <CardDescription>
-                      {project.description ?? 'No description provided.'}
-                    </CardDescription>
+        <div className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {projects.map((project) => (
+              <Card
+                key={project.id}
+                className="flex h-full flex-col border-border/70 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <CardHeader className="space-y-3 pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <CardTitle className="text-lg leading-snug">
+                        {project.project_name}
+                      </CardTitle>
+                      <CardDescription>
+                        {project.description ?? 'No description provided.'}
+                      </CardDescription>
+                    </div>
+                    <Badge variant="secondary">
+                      {project.is_group_project ? 'Group' : 'Individual'}
+                    </Badge>
                   </div>
-                  {project.enrolled ? (
-                    <Badge variant="default">Enrolled</Badge>
-                  ) : (
-                    <Badge variant="secondary">Open</Badge>
-                  )}
-                </div>
-              </CardHeader>
+                </CardHeader>
 
-              <CardContent className="flex flex-1 flex-col justify-between gap-5">
-                <div className="space-y-3 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    <span>{project.lead_examiner_name ?? 'TBA'}</span>
+                <CardContent className="flex flex-1 flex-col justify-between gap-5">
+                  <div className="space-y-3 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      <span>{project.lead_examiner_name ?? 'TBA'}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {project.is_group_project ? (
+                        <Users className="h-4 w-4" />
+                      ) : (
+                        <UserCircle className="h-4 w-4" />
+                      )}
+                      <span>
+                        {project.is_group_project
+                          ? 'Group Project'
+                          : 'Individual Project'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      <span>
+                        Deadline:{' '}
+                        {getDeadlineText(project.submission_deadline)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {project.is_group_project ? (
-                      <Users className="h-4 w-4" />
-                    ) : (
-                      <UserCircle className="h-4 w-4" />
-                    )}
-                    <span>
-                      {project.is_group_project
-                        ? 'Group Project'
-                        : 'Individual Project'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    <span>
-                      Deadline:{' '}
-                      {getDeadlineText(project.submission_deadline)}
-                    </span>
-                  </div>
-                </div>
 
-                <Button
-                  className="w-full cursor-pointer"
-                  disabled={project.enrolled}
-                  onClick={() => handleEnrollClick(project)}
-                >
-                  {project.enrolled ? (
-                    <span className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Enrolled
-                    </span>
-                  ) : (
-                    'Enroll Now'
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+                  <Button
+                    className="w-full cursor-pointer"
+                    onClick={() => handleEnrollClick(project)}
+                  >
+                    Enroll Now
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={Math.ceil(totalCount / 9)}
+            onPageChange={handlePageChange}
+          />
         </div>
       )}
 
