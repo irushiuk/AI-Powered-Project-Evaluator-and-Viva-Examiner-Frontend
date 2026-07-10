@@ -1,6 +1,6 @@
 import apiFetch from './apiClient'
-import { PROJECTS_API } from '@/constants/api.constant'
-import { Project, CreateProjectPayload } from '@/types/project'
+import { PROJECTS_API, PROJECT_API } from '@/constants/api.constant'
+import { Project, CreateProjectPayload, AvailableProject, EnrolledProject } from '@/types/project'
 
 export const projectService = {
 
@@ -35,5 +35,43 @@ export const projectService = {
   async activate(id: string): Promise<void> {
     const res = await apiFetch(PROJECTS_API.activate(id), { method: 'PATCH' })
     if (!res.ok) throw new Error('Failed to activate project')
+  },
+
+  async getAvailable(params: {
+    type: string
+    page: number
+    search?: string
+  }): Promise<{
+    count: number
+    next: string | null
+    previous: string | null
+    results: AvailableProject[]
+  }> {
+    const query = new URLSearchParams({
+      type: params.type,
+      page: params.page.toString(),
+    })
+    if (params.search) {
+      query.append('search', params.search)
+    }
+    const res = await apiFetch(`${PROJECT_API.available}?${query.toString()}`)
+    if (!res.ok) throw new Error('Failed to fetch available projects')
+    return res.json()
+  },
+
+  async getMyEnrollments(params: {
+    page: number
+  }): Promise<{
+    count: number
+    next: string | null
+    previous: string | null
+    results: EnrolledProject[]
+  }> {
+    const query = new URLSearchParams({
+      page: params.page.toString(),
+    })
+    const res = await apiFetch(`${PROJECT_API.myEnrollments}?${query.toString()}`)
+    if (!res.ok) throw new Error('Failed to fetch enrolled projects')
+    return res.json()
   },
 }
