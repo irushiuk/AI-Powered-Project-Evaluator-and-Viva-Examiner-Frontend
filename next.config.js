@@ -13,7 +13,7 @@ const nextConfig = {
   skipTrailingSlashRedirect: true, // Preserve trailing slashes for Django API proxy
   experimental: {
     serverActions: {
-      bodySizeLimit: "2mb",
+      bodySizeLimit: "50mb",
     },
   },
   async rewrites() {
