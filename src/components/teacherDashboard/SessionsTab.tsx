@@ -11,6 +11,14 @@ import {
   UpdateSessionPayload,
 } from "@/types/session"
 import { Button } from "@/components/ui/button"
+import {
+  Calendar,
+  Clock,
+  Trash2,
+  Pencil,
+  Sparkles,
+  MapPin,
+} from "lucide-react"
 import { toast } from "sonner"
 import { formatColomboDateTime, formatColomboTime, getColomboTimezoneLabel } from "@/utils/datetime"
 
@@ -110,34 +118,35 @@ export default function SessionsTab({
             ) : (
               <button
                 onClick={() => setConfirmReset(true)}
-                className="text-xs bg-red-50 hover:bg-red-100 text-red-500 border border-red-100 px-3 py-1.5 rounded-lg transition"
+                className="text-xs bg-red-50 hover:bg-red-100 text-red-500 border border-red-100 px-3 py-1.5 rounded-lg transition flex items-center"
               >
-                🗑 Reset All
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Reset All
               </button>
             )
           )}
           <Button variant="outline" onClick={() => setScheduleMode("manual")}>
-            📝 Manual Schedule
+            <Pencil className="mr-2 h-4 w-4" /> Manual Schedule
           </Button>
           <Button onClick={() => setScheduleMode("auto")}>
-            ⚡ Auto Schedule
+            <Sparkles className="mr-2 h-4 w-4" /> Auto Schedule
           </Button>
         </div>
       </div>
 
-      {/* Empty state */}
       {sessions.length === 0 ? (
         <div className="bg-white border border-dashed border-gray-200 rounded-2xl p-14 text-center">
-          <p className="text-3xl mb-3">🗓️</p>
+          <Calendar className="mx-auto h-12 w-12 text-slate-400 mb-3" />
           <p className="text-gray-500 font-medium">No sessions scheduled yet</p>
           <p className="text-gray-400 text-sm mt-1 mb-5">
             Use auto-scheduling to assign slots automatically, or add sessions manually.
           </p>
           <div className="flex justify-center gap-3">
             <Button variant="outline" onClick={() => setScheduleMode("manual")}>
-              📝 Manual
+              <Pencil className="mr-2 h-4 w-4" /> Manual
             </Button>
-            <Button onClick={() => setScheduleMode("auto")}>⚡ Auto Schedule</Button>
+            <Button onClick={() => setScheduleMode("auto")}>
+              <Sparkles className="mr-2 h-4 w-4" /> Auto Schedule
+            </Button>
           </div>
         </div>
       ) : (
@@ -157,10 +166,16 @@ export default function SessionsTab({
                       ? session.group_name ?? "Group Session"
                       : session.student_name ?? "Student Session"}
                   </p>
-                  <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500">
-                    <span>🕐 {formatColomboDateTime(session.scheduled_start)}</span>
+                  <div className="flex flex-wrap gap-3 mt-1 text-xs text-gray-500 items-center">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5 text-gray-400" />
+                      {formatColomboDateTime(session.scheduled_start)}
+                    </span>
                     <span>→ {formatColomboTime(session.scheduled_end)}</span>
-                    <span>📍 {session.location_room}</span>
+                    <span className="flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5 text-gray-400" />
+                      {session.location_room}
+                    </span>
                     <span>({getColomboTimezoneLabel()})</span>
                   </div>
                 </div>
@@ -173,9 +188,9 @@ export default function SessionsTab({
                 {session.status === "scheduled" && (
                   <button
                     onClick={() => setEditingSession(session)}
-                    className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg transition"
+                    className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg transition flex items-center gap-1"
                   >
-                    ✏️ Edit
+                    <Pencil className="h-3 w-3" /> Edit
                   </button>
                 )}
               </div>
@@ -286,7 +301,9 @@ function AutoScheduleModal({
 
         <div className="px-7 py-5 bg-blue-50 border-b border-blue-100 rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-100 rounded-xl flex items-center justify-center text-lg">⚡</div>
+            <div className="w-9 h-9 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600">
+              <Sparkles className="w-5 h-5" />
+            </div>
             <div>
               <h2 className="text-base font-semibold text-gray-900">Auto Schedule Sessions</h2>
               <p className="text-xs text-gray-500 mt-0.5">Provide date ranges and the system assigns slots</p>
@@ -399,7 +416,7 @@ function AutoScheduleModal({
         <div className="px-7 py-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50 rounded-b-2xl">
           <Button variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
           <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Scheduling..." : "⚡ Auto Schedule"}
+            {submitting ? "Scheduling..." : "Auto Schedule"}
           </Button>
         </div>
       </div>
@@ -481,7 +498,9 @@ function ManualScheduleModal({
 
         <div className="px-7 py-5 bg-purple-50 border-b border-purple-100 rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-purple-100 rounded-xl flex items-center justify-center text-lg">📝</div>
+            <div className="w-9 h-9 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600">
+              <Pencil className="w-5 h-5" />
+            </div>
             <div>
               <h2 className="text-base font-semibold text-gray-900">Manual Schedule Sessions</h2>
               <p className="text-xs text-gray-500 mt-0.5">
@@ -582,9 +601,9 @@ function ManualScheduleModal({
           <Button
             onClick={handleSubmit}
             disabled={submitting}
-            className="bg-purple-600 hover:bg-purple-700 text-white"
+            className="bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1.5"
           >
-            {submitting ? "Scheduling..." : "📝 Schedule Sessions"}
+            {submitting ? "Scheduling..." : "Schedule Sessions"}
           </Button>
         </div>
       </div>
@@ -648,7 +667,9 @@ function EditSessionModal({
 
         <div className="px-7 py-5 bg-amber-50 border-b border-amber-100 rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center text-lg">✏️</div>
+            <div className="w-9 h-9 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
+              <Pencil className="w-5 h-5" />
+            </div>
             <div>
               <h2 className="text-base font-semibold text-gray-900">Edit Session</h2>
               <p className="text-xs text-gray-500 mt-0.5">Update the time slot or room</p>

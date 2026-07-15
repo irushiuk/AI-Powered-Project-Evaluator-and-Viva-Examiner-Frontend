@@ -23,6 +23,17 @@ import {
 } from "@/services/evaluationService"
 import { formatColomboTime } from "@/utils/datetime"
 import AgoraVideoRoom from "@/components/agora/AgoraVideoRoom"
+import {
+  GraduationCap,
+  Sparkles,
+  CheckCircle2,
+  Clock,
+  Video,
+  PartyPopper,
+  Flag,
+  Paperclip,
+  X,
+} from "lucide-react"
 import BehavioralReportCard from "@/components/teacherDashboard/BehavioralReportCard"
 import LiveInterjectionCard from "@/components/teacherDashboard/LiveInterjectionCard"
 
@@ -124,17 +135,24 @@ function FilePicker({
         <button
           type="button"
           onClick={() => ref.current?.click()}
-          className="text-xs px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 transition"
+          className="text-xs px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600 transition flex items-center gap-1"
         >
-          {file ? "📎 " + file.name : "Choose file…"}
+          {file ? (
+            <>
+              <Paperclip className="h-3 w-3" />
+              <span className="truncate max-w-[150px]">{file.name}</span>
+            </>
+          ) : (
+            "Choose file…"
+          )}
         </button>
         {file && (
           <button
             type="button"
             onClick={() => onChange(null)}
-            className="text-xs text-red-400 hover:text-red-600"
+            className="text-xs text-red-400 hover:text-red-600 p-1 hover:bg-red-50 rounded"
           >
-            ✕
+            <X className="h-3 w-3" />
           </button>
         )}
       </div>
@@ -312,8 +330,8 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
   if (!panelOpen) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center text-3xl mb-5">
-          🎓
+        <div className="w-16 h-16 rounded-2xl bg-blue-50 flex items-center justify-center mb-5">
+          <GraduationCap className="w-8 h-8 text-blue-600" />
         </div>
         <h2 className="text-lg font-semibold text-gray-900 mb-1">
           Evaluation Day Panel
@@ -325,9 +343,9 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
         <button
           disabled={opening}
           onClick={handleOpenPanel}
-          className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition disabled:opacity-60"
+          className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition disabled:opacity-60 flex items-center gap-2"
         >
-          {opening ? "Opening…" : "🚀 Open Evaluation Panel"}
+          {opening ? "Opening…" : <><Sparkles className="h-4 w-4" /> Open Panel</>}
         </button>
       </div>
     )
@@ -348,8 +366,8 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
   if (!session) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center text-3xl mb-4">
-          ✅
+        <div className="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center mb-4">
+          <CheckCircle2 className="w-7 h-7 text-emerald-600" />
         </div>
         <h2 className="text-base font-semibold text-gray-800 mb-1">
           No active session
@@ -436,13 +454,17 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
         {/* Timer strip */}
         {session.phase === "demo_in_progress" && (
           <div className="px-6 py-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
-            <p className="text-xs font-medium text-amber-700">⏱ Demo elapsed</p>
+            <p className="text-xs font-medium text-amber-700 flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" /> Demo elapsed
+            </p>
             <ElapsedTicker from={session.actual_start} />
           </div>
         )}
         {session.phase === "viva_in_progress" && (
           <div className="px-6 py-3 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
-            <p className="text-xs font-medium text-blue-700">⏱ Viva elapsed</p>
+            <p className="text-xs font-medium text-blue-700 flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5" /> Viva elapsed
+            </p>
             <ElapsedTicker from={session.demo_completed_at ?? session.actual_start} />
           </div>
         )}
@@ -458,9 +480,9 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
             </p>
             <button
               onClick={() => setJoinedSessionId(session.session_id)}
-              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition shadow-sm"
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition shadow-sm flex items-center gap-2"
             >
-              🎥 Join Session
+              <Video className="h-4 w-4" /> Join Session
             </button>
           </div>
         )}
@@ -469,7 +491,7 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
         <div className="px-6 py-5 bg-gray-50">
           {isCompleted ? (
             <div className="flex items-center gap-3">
-              <span className="text-2xl">🎉</span>
+              <PartyPopper className="h-7 w-7 text-emerald-600" />
               <div>
                 <p className="text-sm font-semibold text-emerald-700">
                   Session complete
@@ -513,9 +535,10 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
                 <button
                   disabled={busy}
                   onClick={() => setConfirmingViva(true)}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition disabled:opacity-60 shadow-sm"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition disabled:opacity-60 shadow-sm flex items-center gap-2"
                 >
-                  {busy ? "Ending…" : "🏁 End Viva"}
+                  <Flag className="h-4 w-4" />
+                  {busy ? "Ending…" : "End Viva"}
                 </button>
               </div>
             </div>
@@ -550,9 +573,9 @@ export default function EvaluationPanel({ projectId }: EvaluationPanelProps) {
           onCancel={() => setConfirmingViva(false)}
         >
           {(videoFile || audioFile) && (
-            <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
-              📎 Uploading:{" "}
-              {[videoFile?.name, audioFile?.name].filter(Boolean).join(", ")}
+            <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 flex items-center gap-1.5">
+              <Paperclip className="h-3.5 w-3.5" />
+              <span>Uploading: {[videoFile?.name, audioFile?.name].filter(Boolean).join(", ")}</span>
             </div>
           )}
         </ConfirmModal>

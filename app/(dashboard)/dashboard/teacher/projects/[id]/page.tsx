@@ -2,6 +2,13 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
+import {
+  ArrowLeft,
+  Users,
+  User,
+  Calendar,
+  GraduationCap,
+} from "lucide-react"
 import DashboardLayout from "@/components/teacherDashboard/DashboardLayout"
 import RubricsTab from "@/components/teacherDashboard/RubircsTab"
 import VivaQuestionsTab from "@/components/teacherDashboard/VivaQuestionsTab"
@@ -71,7 +78,7 @@ export default function ProjectDetailPage() {
         onClick={() => router.push("/dashboard/teacher/projects")}
         className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-5 transition"
       >
-        ← Back to Projects
+        <ArrowLeft className="h-4 w-4" /> Back to Projects
       </button>
 
       {/* Project header */}
@@ -83,8 +90,16 @@ export default function ProjectDetailPage() {
               <span className={`text-xs px-2 py-0.5 rounded-full border font-medium capitalize ${statusStyles[project.status] ?? statusStyles.draft}`}>
                 {project.status}
               </span>
-              <span className="text-xs px-2 py-0.5 rounded-full border font-medium bg-purple-50 text-purple-600 border-purple-200">
-                {project.is_group_project ? "👥 Group" : "👤 Individual"}
+              <span className="text-xs px-2.5 py-0.5 rounded-full border font-medium bg-purple-50 text-purple-600 border-purple-200 flex items-center gap-1">
+                {project.is_group_project ? (
+                  <>
+                    <Users className="h-3.5 w-3.5" /> Group
+                  </>
+                ) : (
+                  <>
+                    <User className="h-3.5 w-3.5" /> Individual
+                  </>
+                )}
               </span>
             </div>
 
@@ -92,10 +107,15 @@ export default function ProjectDetailPage() {
               <p className="text-sm text-gray-500 mt-2 max-w-2xl">{project.description}</p>
             )}
 
-            <div className="flex flex-wrap gap-5 mt-3 text-sm text-gray-500">
-              <span>📅 Deadline: {new Date(project.submission_deadline).toLocaleString()}</span>
-              <span>🎓 {project.academic_year}</span>
-              {/* <span>🆔 <span className="font-mono text-xs">{project.id}</span></span> */}
+            <div className="flex flex-wrap gap-5 mt-3 text-sm text-gray-500 items-center">
+              <span className="flex items-center gap-1.5">
+                <Calendar className="h-4 w-4 text-gray-400" />
+                Deadline: {new Date(project.submission_deadline).toLocaleString()}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <GraduationCap className="h-4 w-4 text-gray-400" />
+                {project.academic_year}
+              </span>
             </div>
           </div>
         </div>
