@@ -913,12 +913,19 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
 
   // ─── Full-screen loading state ────────────────────────────────────
   if (isLoading) {
+    const isGeneratingQuestion = phase === 'viva_in_progress'
     return (
       <div className="flex items-center justify-center h-full bg-slate-950 text-white">
         <div className="text-center space-y-4">
           <Loader2 className="mx-auto h-12 w-12 animate-spin text-blue-500" />
-          <h2 className="text-2xl font-bold">Starting Viva Session</h2>
-          <p className="text-slate-400">Generating your first question from the evaluation rubric.</p>
+          <h2 className="text-2xl font-bold">
+            {isGeneratingQuestion ? 'Starting Viva Session' : 'Connecting to Room'}
+          </h2>
+          <p className="text-slate-400">
+            {isGeneratingQuestion 
+              ? 'Generating your first question from the evaluation rubric.' 
+              : 'Retrieving session details and setting up your media stream...'}
+          </p>
         </div>
       </div>
     )
