@@ -1,4 +1,4 @@
-import { SESSION_API, VIVA_API } from '@/constants/api.constant'
+import { API_BASE, SESSION_API, VIVA_API } from '@/constants/api.constant'
 import type {
   CurrentQuestionResponse,
   StartVivaResponse,
@@ -88,10 +88,40 @@ export const vivaSessionService = {
 
   /** Sends a presence ping heartbeat to mark the current student as active in the Agora room. */
   async sendPresencePing(sessionId: string): Promise<any> {
-    const res = await apiFetch(`/sessions/${sessionId}/presence/`, {
+    const res = await apiFetch(`${API_BASE}/sessions/${sessionId}/presence/`, {
       method: 'POST',
     })
 
     return readJson<any>(res, 'Failed to send presence heartbeat')
+  },
+
+  /** Start background GPU warmup on Modal */
+  async startWarmup(sessionId: string): Promise<void> {
+    const res = await apiFetch(`${API_BASE}/sessions/${sessionId}/start-warmup/`, { method: 'POST' })
+    await readJson<unknown>(res, 'Failed to trigger warmup')
+  },
+
+  /** Upload audio slice WebM chunk */
+  async uploadDemoAudio(sessionId: string, formData: FormData): Promise<any> {
+    const res = await apiFetch(`${API_BASE}/sessions/${sessionId}/demo-audio/`, {
+      method: 'POST',
+      body: formData,
+    })
+    return readJson<any>(res, 'Failed to upload audio chunk')
+  },
+
+  /** Upload JPEG slide screenshot */
+  async uploadDemoScreenshot(sessionId: string, formData: FormData): Promise<any> {
+    const res = await apiFetch(`${API_BASE}/sessions/${sessionId}/demo-screenshot/`, {
+      method: 'POST',
+      body: formData,
+    })
+    return readJson<any>(res, 'Failed to upload slide screenshot')
+  },
+
+  /** Get queue process status */
+  async getDemoQueueStatus(sessionId: string): Promise<{ drained: boolean; total: number; processed: number; failed: number }> {
+    const res = await apiFetch(`${API_BASE}/sessions/${sessionId}/demo-queue-status/`)
+    return readJson<any>(res, 'Failed to fetch queue status')
   },
 }

@@ -34,7 +34,7 @@ export interface AgoraVideoRoomProps {
   remoteJoinNotice?: string
   /** Called whenever this user starts/stops sharing their screen. Lets the parent
    * show controls (e.g. "End Demo") only to the participant who is presenting. */
-  onScreenShareChange?: (isSharing: boolean) => void
+  onScreenShareChange?: (isSharing: boolean, track: any) => void
 }
 
 export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle, onLocalTracks, remoteJoinNotice, onScreenShareChange }: AgoraVideoRoomProps) {
@@ -141,8 +141,8 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
 
   // Notify the parent when this user's screen-share state changes.
   useEffect(() => {
-    onScreenShareChangeRef.current?.(isSharingScreen)
-  }, [isSharingScreen])
+    onScreenShareChangeRef.current?.(isSharingScreen, screenTrack)
+  }, [isSharingScreen, screenTrack])
 
   useEffect(() => {
     let active = true
@@ -425,13 +425,19 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
   }
 
   const toggleScreenShare = async () => {
-    if (!clientRef.current || !isJoined) return
+    console.log('DEBUG AgoraVideoRoom: toggleScreenShare invoked. clientJoined:', isJoined, 'current isSharingScreen:', isSharingScreen)
+    if (!clientRef.current || !isJoined) {
+      console.log('DEBUG AgoraVideoRoom: toggleScreenShare aborted because clientRef or isJoined is falsy')
+      return
+    }
 
     try {
       const AgoraRTC = (await import('agora-rtc-sdk-ng')).default
 
       if (isSharingScreen) {
+        console.log('DEBUG AgoraVideoRoom: Stopping screen share...')
         if (screenTrackRef.current) {
+          console.log('DEBUG AgoraVideoRoom: Unpublishing and closing screenTrackRef:', screenTrackRef.current)
           await clientRef.current.unpublish(screenTrackRef.current)
           const track = screenTrackRef.current
           if (Array.isArray(track)) {
@@ -447,33 +453,48 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         }
         setScreenTrack(null)
         setIsSharingScreen(false)
+        if (onScreenShareChangeRef.current) {
+          console.log('DEBUG AgoraVideoRoom: notifying parent screen share stopped')
+          onScreenShareChangeRef.current(false, null)
+        }
 
         if (localVideoTrackRef.current && !isCamOff) {
           try {
+            console.log('DEBUG AgoraVideoRoom: republishing local camera track')
             await clientRef.current.publish(localVideoTrackRef.current)
           } catch (pubErr) {
             console.warn('Failed to publish camera track after screen share:', pubErr)
           }
         }
       } else {
+        console.log('DEBUG AgoraVideoRoom: Calling AgoraRTC.createScreenVideoTrack({}, "auto")...')
         const screenTrackResult = await AgoraRTC.createScreenVideoTrack({}, 'auto')
+        console.log('DEBUG AgoraVideoRoom: createScreenVideoTrack resolved successfully:', screenTrackResult)
         screenTrackRef.current = screenTrackResult
         setScreenTrack(screenTrackResult)
 
         if (localVideoTrackRef.current) {
+          console.log('DEBUG AgoraVideoRoom: unpublishing camera track before publishing screen track')
           await clientRef.current.unpublish(localVideoTrackRef.current)
         }
+        console.log('DEBUG AgoraVideoRoom: publishing screen track to client')
         await clientRef.current.publish(screenTrackResult)
+        console.log('DEBUG AgoraVideoRoom: published screen track successfully')
 
         const videoTrack = Array.isArray(screenTrackResult) ? screenTrackResult[0] : screenTrackResult;
         videoTrack.on('track-ended', () => {
+          console.log('DEBUG AgoraVideoRoom: screen track ended via browser UI')
           toggleScreenShare()
         })
 
         setIsSharingScreen(true)
+        if (onScreenShareChangeRef.current) {
+          console.log('DEBUG AgoraVideoRoom: notifying parent screen share started')
+          onScreenShareChangeRef.current(true, screenTrackResult)
+        }
       }
     } catch (err) {
-      console.error('Screen share error:', err)
+      console.error('DEBUG AgoraVideoRoom: Screen share error caught:', err)
       toast.error('Failed to share screen.')
     }
   }

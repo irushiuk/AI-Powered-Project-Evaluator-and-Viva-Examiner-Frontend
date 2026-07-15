@@ -48,6 +48,43 @@ import { useSessionRecorder } from '@/hooks/useSessionRecorder'
 
 const SKIP_ANSWER_TEXT = 'Student skipped this question.'
 
+function computeAverageHash(canvas: HTMLCanvasElement): string {
+  const tinyCanvas = document.createElement('canvas')
+  tinyCanvas.width = 8
+  tinyCanvas.height = 8
+  const ctx = tinyCanvas.getContext('2d')
+  if (!ctx) return ''
+  ctx.drawImage(canvas, 0, 0, 8, 8)
+  const imgData = ctx.getImageData(0, 0, 8, 8)
+  const data = imgData.data
+  
+  let total = 0
+  const gray: number[] = []
+  for (let i = 0; i < 64; i++) {
+    const r = data[i * 4]
+    const g = data[i * 4 + 1]
+    const b = data[i * 4 + 2]
+    const avg = (r + g + b) / 3
+    gray.push(avg)
+    total += avg
+  }
+  const average = total / 64
+  let hash = ''
+  for (let i = 0; i < 64; i++) {
+    hash += gray[i] >= average ? '1' : '0'
+  }
+  return hash
+}
+
+function getHammingDistance(h1: string, h2: string): number {
+  let dist = 0
+  for (let i = 0; i < h1.length; i++) {
+    if (h1[i] !== h2[i]) dist++
+  }
+  return dist
+}
+
+
 type SpeechRecognitionAlternativeLike = {
   transcript: string
 }
@@ -170,6 +207,8 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
   // True when THIS student is the one sharing their screen — only the presenter
   // sees the "End Demo & Start Viva" button.
   const [isSharingScreen, setIsSharingScreen] = useState(false)
+  const [screenTrack, setScreenTrack] = useState<any>(null)
+  const [demoAudioTrack, setDemoAudioTrack] = useState<any>(null)
 
   const [showExitConfirm, setShowExitConfirm] = useState(false)
 
@@ -178,6 +217,14 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
   const startRequestRef = useRef(false)
   const mountedRef = useRef(false)
 
+  const presentationStartRef = useRef<number | null>(null)
+  const audioSequenceRef = useRef<number>(1)
+  const slideSequenceRef = useRef<number>(1)
+  const screenIntervalRef = useRef<number | null>(null)
+  const audioRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioIntervalRef = useRef<number | null>(null)
+  const lastSlideHashRef = useRef<string>('')
+
   // Session recording: same camera/mic tracks Agora publishes; uploaded at
   // session end for the examiner's post-hoc behavioral report.
   const sessionRecorder = useSessionRecorder(sessionId)
@@ -185,6 +232,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
   const handleLocalTracks = useCallback(
     (videoTrack: unknown, audioTrack: unknown) => {
       sessionRecorder.start(videoTrack, audioTrack)
+      setDemoAudioTrack(audioTrack)
     },
     [sessionRecorder],
   )
@@ -217,6 +265,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
 
     try {
       const response = await vivaSessionService.startSession(sessionId)
+      console.log('DEBUG: startSession response:', response)
       const question = normalizeQuestion(response)
 
       if (!question) {
@@ -314,6 +363,196 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
     }, 5000)
     return () => window.clearInterval(id)
   }, [phase, sessionId, loadFirstQuestion])
+
+  // Trigger warmup when demo starts locally or when synced
+  useEffect(() => {
+    if (phase === 'demo_in_progress') {
+      vivaSessionService.startWarmup(sessionId).catch((err) => {
+        console.warn('Warmup trigger failed:', err)
+      })
+    }
+  }, [phase, sessionId])
+
+  // Start presentation capture loop (audio chunks + slide screenshots)
+  useEffect(() => {
+    console.log('DEBUG LiveVivaRoom: presentation useEffect triggered. screenTrack:', screenTrack, 'phase:', phase, 'demoAudioTrack:', demoAudioTrack)
+    if (phase !== 'demo_in_progress') {
+      // Clean up loops
+      if (screenIntervalRef.current) {
+        window.clearInterval(screenIntervalRef.current)
+        screenIntervalRef.current = null
+      }
+      if (audioIntervalRef.current) {
+        window.clearInterval(audioIntervalRef.current)
+        audioIntervalRef.current = null
+      }
+      if (audioRecorderRef.current && audioRecorderRef.current.state !== 'inactive') {
+        audioRecorderRef.current.stop()
+      }
+      return
+    }
+
+    if (!presentationStartRef.current) {
+      presentationStartRef.current = Date.now()
+    }
+
+    // ─── 1. AUDIO CHUNKING RECORDER ───
+    if (demoAudioTrack && !audioRecorderRef.current) {
+      try {
+        const mediaStreamTrack = demoAudioTrack.getMediaStreamTrack()
+        const mediaStream = new MediaStream([mediaStreamTrack])
+        
+        let audioChunks: Blob[] = []
+        const recorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm' })
+        audioRecorderRef.current = recorder
+
+        recorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            audioChunks.push(e.data)
+          }
+        }
+
+        recorder.onstop = async () => {
+          if (audioChunks.length === 0) return
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
+          audioChunks = [] // reset
+
+          const elapsed = presentationStartRef.current ? (Date.now() - presentationStartRef.current) / 1000 : 0
+          const duration = 20
+          const start = Math.max(0, elapsed - duration)
+          const end = elapsed
+
+          const seq = audioSequenceRef.current
+          audioSequenceRef.current += 1
+
+          const formData = new FormData()
+          formData.append('audio', audioBlob, `chunk_${seq}.webm`)
+          formData.append('sequence_number', seq.toString())
+          formData.append('start_time', start.toFixed(2))
+          formData.append('end_time', end.toFixed(2))
+
+          try {
+            await vivaSessionService.uploadDemoAudio(sessionId, formData)
+          } catch (err) {
+            console.warn('Audio chunk upload failed:', err)
+          }
+
+          // Restart recording for next chunk if still in demo phase
+          if (phase === 'demo_in_progress' && audioRecorderRef.current && audioRecorderRef.current.state === 'inactive') {
+            audioRecorderRef.current.start()
+          }
+        }
+
+        // Start initial chunk
+        recorder.start()
+
+        // Periodically stop and restart the recorder every 20 seconds to send chunks
+        audioIntervalRef.current = window.setInterval(() => {
+          if (recorder.state === 'recording') {
+            recorder.stop()
+          }
+        }, 20000)
+
+      } catch (err) {
+        console.error('Failed to initialize demo audio recorder:', err)
+      }
+    }
+
+    // ─── 2. SCREENSHOT CAPTURING LOOP ───
+    if (screenTrack) {
+      console.log('DEBUG: screenTrack detected:', screenTrack)
+      try {
+        const videoTrack = Array.isArray(screenTrack) ? screenTrack[0] : screenTrack
+        console.log('DEBUG: resolved videoTrack:', videoTrack)
+        const mediaStreamTrack = videoTrack.getMediaStreamTrack()
+        console.log('DEBUG: mediaStreamTrack:', mediaStreamTrack)
+        const videoElement = document.createElement('video')
+        videoElement.srcObject = new MediaStream([mediaStreamTrack])
+        videoElement.muted = true
+        videoElement.playsInline = true
+        videoElement.play()
+          .then(() => console.log('DEBUG: videoElement started playing successfully.'))
+          .catch(e => console.warn('Video play failed:', e))
+
+        // Reset hash baseline on track changes
+        lastSlideHashRef.current = ''
+        console.log('DEBUG: Reset lastSlideHashRef to empty string')
+
+        screenIntervalRef.current = window.setInterval(() => {
+          if (videoElement.readyState < 2 && videoElement.videoWidth === 0) {
+            console.log(`DEBUG: tick skipped - readyState: ${videoElement.readyState}, videoWidth: ${videoElement.videoWidth}`)
+            return // Wait for video frame to load
+          }
+
+          console.log(`DEBUG: tick processing - readyState: ${videoElement.readyState}, videoWidth: ${videoElement.videoWidth}, videoHeight: ${videoElement.videoHeight}`)
+
+          const canvas = document.createElement('canvas')
+          canvas.width = videoElement.videoWidth || 640
+          canvas.height = videoElement.videoHeight || 480
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            console.log('DEBUG: failed to get 2d context from canvas')
+            return
+          }
+          ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height)
+
+          // Perform average hash check
+          const currentHash = computeAverageHash(canvas)
+          const distance = lastSlideHashRef.current ? getHammingDistance(lastSlideHashRef.current, currentHash) : 99
+          console.log(`DEBUG: hash computed. current: ${currentHash}, last: ${lastSlideHashRef.current || 'NONE'}, distance: ${distance}`)
+
+          // If visual change is detected (Hamming distance >= 5 or first frame)
+          if (distance >= 5) {
+            console.log(`DEBUG: distance ${distance} >= 5, recording new slide state`)
+            lastSlideHashRef.current = currentHash
+
+            canvas.toBlob(async (blob) => {
+              if (!blob) {
+                console.log('DEBUG: canvas.toBlob returned null blob!')
+                return
+              }
+
+              const elapsed = presentationStartRef.current ? (Date.now() - presentationStartRef.current) / 1000 : 0
+              const seq = slideSequenceRef.current
+              slideSequenceRef.current += 1
+
+              console.log(`DEBUG: preparing to upload slide. seq: ${seq}, elapsed: ${elapsed}s, size: ${blob.size} bytes`)
+
+              const formData = new FormData()
+              formData.append('image', blob, `slide_${seq}.jpg`)
+              formData.append('sequence_number', seq.toString())
+              formData.append('timestamp', elapsed.toFixed(2))
+
+              try {
+                const response = await vivaSessionService.uploadDemoScreenshot(sessionId, formData)
+                console.log(`DEBUG: uploadDemoScreenshot succeeded for seq ${seq}:`, response)
+              } catch (err) {
+                console.error(`DEBUG: uploadDemoScreenshot failed for seq ${seq}:`, err)
+              }
+            }, 'image/jpeg', 0.8) // Compress as JPEG with 80% quality
+          } else {
+            console.log(`DEBUG: distance ${distance} < 5, skipping screenshot upload`)
+          }
+        }, 4000)
+
+      } catch (err) {
+        console.error('Failed to initialize screenshot capture loop:', err)
+      }
+    } else {
+      console.log('DEBUG: screenTrack is null or falsy, stopping screenshot capture loop if running')
+      // Screen share stopped
+      if (screenIntervalRef.current) {
+        window.clearInterval(screenIntervalRef.current)
+        screenIntervalRef.current = null
+      }
+    }
+
+    return () => {
+      console.log('DEBUG LiveVivaRoom: presentation useEffect cleanup running. screenTrack:', screenTrack)
+      if (screenIntervalRef.current) window.clearInterval(screenIntervalRef.current)
+      if (audioIntervalRef.current) window.clearInterval(audioIntervalRef.current)
+    }
+  }, [phase, screenTrack, demoAudioTrack, sessionId])
 
   useEffect(() => {
     if (hasFinished) return
@@ -632,7 +871,35 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
     if (endingDemo) return
     setEndingDemo(true)
     try {
+      // 1. Stop local loops immediately
+      if (audioRecorderRef.current && audioRecorderRef.current.state !== 'inactive') {
+        audioRecorderRef.current.stop()
+      }
+      if (screenIntervalRef.current) {
+        window.clearInterval(screenIntervalRef.current)
+        screenIntervalRef.current = null
+      }
+      if (audioIntervalRef.current) {
+        window.clearInterval(audioIntervalRef.current)
+        audioIntervalRef.current = null
+      }
+
+      // 2. Call backend to mark demo phase as ended
       await vivaSessionService.endDemo(sessionId)
+      
+      // 3. Poll the queue until everything is processed (drained)
+      toast.info('Analyzing presentation talking points and slides. Please wait...')
+      
+      let attempts = 0
+      while (attempts < 60) { // Poll up to 2 minutes max
+        const status = await vivaSessionService.getDemoQueueStatus(sessionId)
+        if (status.drained) {
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+        attempts++
+      }
+
       toast.success('Demo finished — your viva is starting.')
       setPhase('viva_in_progress')
       setIsLoading(true)
@@ -757,7 +1024,10 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
             sessionId={sessionId}
             className="rounded-none border-0"
             onLocalTracks={handleLocalTracks}
-            onScreenShareChange={setIsSharingScreen}
+            onScreenShareChange={(sharing, track) => {
+              setIsSharingScreen(sharing)
+              setScreenTrack(track)
+            }}
             remoteJoinNotice="Examiner joining now"
           />
         </div>
