@@ -67,6 +67,7 @@ export const VIVA_API = {
 
 export const CODE_ANALYSIS_API = {
   sonarSummary: (codeSubmissionId: string) => `${API_BASE}/code-analysis/submissions/${codeSubmissionId}/sonar-summary/`,
+  codeAnalysisReport: (codeSubmissionId: string) => `${API_BASE}/code-analysis/submissions/${codeSubmissionId}/report/`,
 }
 
 export const CV_ANALYSIS_API = {
