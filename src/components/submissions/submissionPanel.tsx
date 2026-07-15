@@ -6,20 +6,44 @@ import { submissionService, Submission } from "@/services/submissionService"
 import { Project } from "@/types/project"
 import { toast } from "sonner"
 
-// ── Analysis status badge ────────────────────────────────────────────────────
+import {
+  Clock,
+  Loader2,
+  CheckCircle2,
+  AlertTriangle,
+  Inbox,
+  Github,
+  Download,
+  Eye,
+  EyeOff,
+} from "lucide-react"
 
-const statusStyles: Record<string, string> = {
-  pending:    "bg-yellow-50 text-yellow-700 border-yellow-200",
-  processing: "bg-blue-50 text-blue-700 border-blue-200",
-  completed:  "bg-green-50 text-green-700 border-green-200",
-  failed:     "bg-red-50 text-red-700 border-red-200",
-}
+// ── Analysis status badge config ──────────────────────────────────────────────
 
-const statusLabel: Record<string, string> = {
-  pending:    "⏳ Analysis Pending",
-  processing: "⚙️ Analysing...",
-  completed:  "✅ Analysis Done",
-  failed:     "❌ Analysis Failed",
+const analysisStatusConfig: Record<
+  string,
+  { label: string; icon: any; colorClass: string }
+> = {
+  pending: {
+    label: "Analysis Pending",
+    icon: Clock,
+    colorClass: "bg-yellow-50 text-yellow-700 border-yellow-200",
+  },
+  processing: {
+    label: "Analysing...",
+    icon: Loader2,
+    colorClass: "bg-blue-50 text-blue-700 border-blue-200",
+  },
+  completed: {
+    label: "Analysis Done",
+    icon: CheckCircle2,
+    colorClass: "bg-green-50 text-green-700 border-green-200",
+  },
+  failed: {
+    label: "Analysis Failed",
+    icon: AlertTriangle,
+    colorClass: "bg-red-50 text-red-700 border-red-200",
+  },
 }
 
 // ── Main panel ───────────────────────────────────────────────────────────────
@@ -110,7 +134,7 @@ export default function SubmissionsPanel() {
                 </div>
               ) : submissions.length === 0 ? (
                 <div className="text-center py-14 text-gray-400">
-                  <p className="text-3xl mb-2">📭</p>
+                  <Inbox className="h-10 w-10 text-gray-400 mx-auto mb-3" />
                   <p className="text-sm">No submissions yet for this project.</p>
                 </div>
               ) : (
@@ -153,17 +177,21 @@ function SubmissionCard({ submission: s }: { submission: Submission }) {
           </p>
         </div>
 
-        {/* Right side: status + actions */}
+         {/* Right side: status + actions */}
         <div className="flex flex-wrap items-center gap-2 shrink-0">
 
           {/* Analysis status badge */}
-          {analysisStatus && (
+          {analysisStatus && analysisStatusConfig[analysisStatus] && (
             <span
-              className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
-                statusStyles[analysisStatus] ?? "bg-gray-50 text-gray-600 border-gray-200"
+              className={`text-xs px-2.5 py-1 rounded-full border font-medium flex items-center gap-1.5 ${
+                analysisStatusConfig[analysisStatus].colorClass
               }`}
             >
-              {statusLabel[analysisStatus] ?? analysisStatus}
+              {(() => {
+                const IconComp = analysisStatusConfig[analysisStatus].icon;
+                return <IconComp className={`h-3.5 w-3.5 ${analysisStatus === 'processing' ? 'animate-spin' : ''}`} />;
+              })()}
+              {analysisStatusConfig[analysisStatus].label}
             </span>
           )}
 
@@ -173,9 +201,10 @@ function SubmissionCard({ submission: s }: { submission: Submission }) {
               href={s.github_repo_url}
               target="_blank"
               rel="noreferrer"
-              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium transition"
+              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium transition inline-flex items-center gap-1.5"
             >
-              GitHub Repo ↗
+              <Github className="h-3.5 w-3.5" />
+              GitHub Repo
             </a>
           )}
 
@@ -183,9 +212,13 @@ function SubmissionCard({ submission: s }: { submission: Submission }) {
           {s.report_file_url && (
             <button
               onClick={() => setShowPdf((prev) => !prev)}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition"
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition inline-flex items-center gap-1.5"
             >
-              {showPdf ? "Hide Report" : "View Report"}
+              {showPdf ? (
+                <><EyeOff className="h-3.5 w-3.5" /> Hide Report</>
+              ) : (
+                <><Eye className="h-3.5 w-3.5" /> View Report</>
+              )}
             </button>
           )}
 
@@ -195,9 +228,10 @@ function SubmissionCard({ submission: s }: { submission: Submission }) {
               href={s.report_file_url}
               target="_blank"
               rel="noreferrer"
-              className="px-3 py-1.5 bg-white hover:bg-gray-50 border text-gray-700 rounded-lg text-xs font-medium transition"
+              className="px-3 py-1.5 bg-white hover:bg-gray-50 border text-gray-700 rounded-lg text-xs font-medium transition inline-flex items-center gap-1.5"
             >
-              Download ↓
+              <Download className="h-3.5 w-3.5" />
+              Download
             </a>
           )}
 

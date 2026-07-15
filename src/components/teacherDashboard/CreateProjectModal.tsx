@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "../ui/button"
+import { Pencil, Plus, User, Users } from "lucide-react"
 import { CreateProjectPayload, Project } from "@/types/project"
 
 type Props = {
@@ -98,12 +99,16 @@ export default function CreateProjectModal({ isOpen, onClose, onCreate, initialD
         >
           <div className="flex items-center gap-3">
             <div
-              className={`w-9 h-9 rounded-xl flex items-center justify-center text-lg ${
-                isEditMode ? "bg-amber-100" : "bg-blue-100"
-              }`}
-            >
-              {isEditMode ? "✏️" : "➕"}
-            </div>
+               className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                 isEditMode ? "bg-amber-100" : "bg-blue-100"
+               }`}
+             >
+               {isEditMode ? (
+                 <Pencil className="w-5 h-5 text-amber-600" />
+               ) : (
+                 <Plus className="w-5 h-5 text-blue-600" />
+               )}
+             </div>
             <div>
               <h2 className="text-lg font-semibold text-gray-900">
                 {isEditMode ? "Edit Project" : "Create New Project"}
@@ -162,24 +167,24 @@ export default function CreateProjectModal({ isOpen, onClose, onCreate, initialD
               <button
                 type="button"
                 onClick={() => setIsGroupProject(false)}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition ${
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition flex items-center justify-center gap-1.5 ${
                   !isGroupProject
                     ? "bg-blue-500 text-white border-blue-500"
                     : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
                 }`}
               >
-                👤 Individual
+                <User className="w-4 h-4" /> Individual
               </button>
               <button
                 type="button"
                 onClick={() => setIsGroupProject(true)}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition ${
+                className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition flex items-center justify-center gap-1.5 ${
                   isGroupProject
                     ? "bg-blue-500 text-white border-blue-500"
                     : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
                 }`}
               >
-                👥 Group
+                <Users className="w-4 h-4" /> Group
               </button>
             </div>
           </div>

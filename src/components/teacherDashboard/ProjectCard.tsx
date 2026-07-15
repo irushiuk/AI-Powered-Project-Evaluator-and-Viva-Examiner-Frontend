@@ -5,6 +5,7 @@ import Link from "next/link"
 import {
   Calendar,
   Users,
+  User,
   UserCircle,
   ArrowRight,
 } from "lucide-react"
@@ -67,11 +68,17 @@ export default function ProjectCard({
 
               <Badge
                 variant="outline"
-                className="bg-blue-50 text-blue-700 border-blue-200"
+                className="bg-blue-50 text-blue-700 border-blue-200 flex items-center gap-1"
               >
-                {project.is_group_project
-                  ? "👥 Group"
-                  : "👤 Individual"}
+                {project.is_group_project ? (
+                  <>
+                    <Users className="h-3 w-3" /> Group
+                  </>
+                ) : (
+                  <>
+                    <User className="h-3 w-3" /> Individual
+                  </>
+                )}
               </Badge>
             </div>
           </div>
