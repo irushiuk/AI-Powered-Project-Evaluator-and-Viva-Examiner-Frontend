@@ -39,11 +39,25 @@ export interface CvArtifact {
   session_flags: CvIntegrityFlag[]
 }
 
+/**
+ * A question placed at its offset into the session recording. The AI examiner
+ * speaks via the browser's speech synthesiser, which no recording can capture,
+ * so the player shows the question text at these points instead.
+ */
+export interface CvQuestionMarker {
+  question_id: string
+  question_text: string
+  offset_ms: number
+  source: string
+  order: number
+}
+
 export interface CvSummaryResponse {
   status: 'pending' | 'processing' | 'completed' | 'failed'
   artifact: CvArtifact | null
   recording_url: string
   playback_url: string | null
+  question_timeline: CvQuestionMarker[]
   error_message: string
   updated_at: string
 }
@@ -54,17 +68,6 @@ async function parseError(res: Response, fallback: string): Promise<never> {
 }
 
 export const cvAnalysisService = {
-  /** Upload the browser-recorded session video; backend queues analysis. */
-  async uploadRecording(sessionId: string, file: File): Promise<void> {
-    const form = new FormData()
-    form.append('video_file', file)
-    const res = await apiFetch(CV_ANALYSIS_API.uploadRecording(sessionId), {
-      method: 'POST',
-      body: form, // browser sets the multipart boundary
-    })
-    if (!res.ok) await parseError(res, 'Failed to upload session recording')
-  },
-
   /** Examiner: (re)queue analysis for a session that has a recording. */
   async triggerAnalysis(sessionId: string): Promise<void> {
     const res = await apiFetch(CV_ANALYSIS_API.triggerAnalysis(sessionId), {

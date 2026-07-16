@@ -42,9 +42,7 @@ import type {
 } from '@/types/vivaSession'
 import { toast } from 'sonner'
 import AgoraVideoRoom from '@/components/agora/AgoraVideoRoom'
-import { cvAnalysisService } from '@/services/cvAnalysisService'
 import { liveQuestionService, type LiveQuestion } from '@/services/liveQuestionService'
-import { useSessionRecorder } from '@/hooks/useSessionRecorder'
 
 const SKIP_ANSWER_TEXT = 'Student skipped this question.'
 
@@ -225,30 +223,14 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
   const audioIntervalRef = useRef<number | null>(null)
   const lastSlideHashRef = useRef<string>('')
 
-  // Session recording: same camera/mic tracks Agora publishes; uploaded at
-  // session end for the examiner's post-hoc behavioral report.
-  const sessionRecorder = useSessionRecorder(sessionId)
-
-  const handleLocalTracks = useCallback(
-    (videoTrack: unknown, audioTrack: unknown) => {
-      sessionRecorder.start(videoTrack, audioTrack)
-      setDemoAudioTrack(audioTrack)
-    },
-    [sessionRecorder],
-  )
-
-  const uploadSessionRecording = useCallback(async () => {
-    try {
-      const file = await sessionRecorder.stop()
-      if (!file) return
-      toast.info('Uploading session recording…')
-      await cvAnalysisService.uploadRecording(sessionId, file)
-      toast.success('Session recording uploaded.')
-    } catch (err) {
-      console.warn('Session recording upload failed:', err)
-      toast.error('Could not upload the session recording.')
-    }
-  }, [sessionRecorder, sessionId])
+  // The viva is recorded server-side by Agora Cloud Recording (started at the
+  // viva transition, stopped at end-viva, written straight to Azure Blob), so
+  // the browser holds no recorder: nothing to upload, and a crash here can no
+  // longer cost the examiner their behavioral report. See
+  // agora_service/cloud_recording.py.
+  const handleLocalTracks = useCallback((_videoTrack: unknown, audioTrack: unknown) => {
+    setDemoAudioTrack(audioTrack)
+  }, [])
 
   const loadFirstQuestion = useCallback(async () => {
     if (startRequestRef.current) return
@@ -803,11 +785,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
         clearCachedQuestion(sessionId)
         setHasFinished(true)
         toast.success('Viva session completed successfully.')
-        // Upload the recording before leaving so the examiner's behavioral
-        // report can be generated from it.
-        void uploadSessionRecording().finally(() => {
-          window.setTimeout(() => router.push('/dashboard/student/sessions'), 2200)
-        })
+        window.setTimeout(() => router.push('/dashboard/student/sessions'), 2200)
         return
       }
 

@@ -14,6 +14,7 @@ export const AUTH_API = {
   login: `${API_BASE}/auth/login/`,
   refresh: `${API_BASE}/auth/token/refresh/`,
   me: `${API_BASE}/auth/me/`,
+  facePhoto: `${API_BASE}/auth/me/face-photo/`,
   logout: `${API_BASE}/auth/logout/`,
   registerStudent: `${API_BASE}/auth/student/register/`,
   registerExaminer: `${API_BASE}/auth/examiner/register/`,
@@ -72,7 +73,6 @@ export const CODE_ANALYSIS_API = {
 }
 
 export const CV_ANALYSIS_API = {
-  uploadRecording: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/cv/recording/`,
   triggerAnalysis: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/cv/analyze/`,
   summary: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/cv/summary/`,
 }
