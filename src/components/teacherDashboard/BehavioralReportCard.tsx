@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import {
   cvAnalysisService,
   type CvIntegrityFlag,
+  type CvQuestionMarker,
   type CvSummaryResponse,
 } from '@/services/cvAnalysisService'
 
@@ -25,12 +26,17 @@ import {
  * share and integrity flags never affect any score. Flags are timecoded
  * evidence pointers — clicking one seeks the session recording so the
  * examiner can judge the moment themselves.
+ *
+ * The AI examiner's voice is not in the recording (it is spoken by the
+ * student's browser and cannot be captured), so its questions are overlaid on
+ * the player as chapters and a caption instead.
  */
 export default function BehavioralReportCard({ sessionId }: { sessionId: string }) {
   const [summary, setSummary] = useState<CvSummaryResponse | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [loading, setLoading] = useState(true)
   const [triggering, setTriggering] = useState(false)
+  const [activeQuestion, setActiveQuestion] = useState<CvQuestionMarker | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const load = useCallback(async () => {
@@ -84,6 +90,25 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
         ...artifact.per_student.flatMap((s) => s.integrity_flags),
       ].sort((a, b) => a.t_ms - b.t_ms)
     : []
+  const questions: CvQuestionMarker[] = [...(summary?.question_timeline ?? [])].sort(
+    (a, b) => a.offset_ms - b.offset_ms,
+  )
+
+  // The question on screen at the current playhead = the last one asked at or
+  // before it.
+  function handleTimeUpdate() {
+    const video = videoRef.current
+    if (!video || questions.length === 0) return
+    const nowMs = video.currentTime * 1000
+    let current: CvQuestionMarker | null = null
+    for (const q of questions) {
+      if (q.offset_ms <= nowMs) current = q
+      else break
+    }
+    setActiveQuestion((prev) =>
+      prev?.question_id === current?.question_id ? prev : current,
+    )
+  }
 
   return (
     <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
@@ -229,19 +254,66 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
               </div>
             )}
 
-            {/* Session recording player */}
+            {/* Session recording player. The caption stands in for the AI
+                examiner's voice, which is spoken by the student's browser and
+                so never reaches the recording. */}
             {summary?.playback_url ? (
-              <video
-                ref={videoRef}
-                src={summary.playback_url}
-                controls
-                preload="metadata"
-                className="w-full rounded-xl border border-gray-200 bg-black"
-              />
+              <div className="relative">
+                <video
+                  ref={videoRef}
+                  src={summary.playback_url}
+                  controls
+                  preload="metadata"
+                  onTimeUpdate={handleTimeUpdate}
+                  className="w-full rounded-xl border border-gray-200 bg-black"
+                />
+                {activeQuestion && (
+                  <div className="pointer-events-none absolute inset-x-0 bottom-12 px-3">
+                    <p className="mx-auto max-w-2xl rounded-lg bg-black/75 px-3 py-1.5 text-center text-xs leading-snug text-white">
+                      <span className="font-semibold text-blue-300">
+                        Q{activeQuestion.order}:{' '}
+                      </span>
+                      {activeQuestion.question_text}
+                    </p>
+                  </div>
+                )}
+              </div>
             ) : (
               <p className="text-xs text-gray-400">
                 Recording playback unavailable.
               </p>
+            )}
+
+            {/* Question chapters */}
+            {questions.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
+                  <MessageSquareText className="w-3.5 h-3.5 text-blue-500" />
+                  Questions asked ({questions.length})
+                </p>
+                {questions.map((q) => (
+                  <button
+                    key={q.question_id}
+                    onClick={() => seekTo(q.offset_ms)}
+                    disabled={!summary?.playback_url}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left disabled:cursor-default ${
+                      activeQuestion?.question_id === q.question_id
+                        ? 'bg-blue-100'
+                        : 'bg-blue-50 hover:bg-blue-100'
+                    }`}
+                  >
+                    <span className="text-[11px] font-semibold text-blue-700 shrink-0">
+                      Q{q.order}
+                    </span>
+                    <span className="flex-1 text-xs text-gray-700 line-clamp-2">
+                      {q.question_text}
+                    </span>
+                    <span className="text-xs font-mono text-blue-700 flex items-center gap-1 shrink-0">
+                      <Play className="w-3 h-3" /> {formatMs(q.offset_ms)}
+                    </span>
+                  </button>
+                ))}
+              </div>
             )}
           </>
         ) : null}
