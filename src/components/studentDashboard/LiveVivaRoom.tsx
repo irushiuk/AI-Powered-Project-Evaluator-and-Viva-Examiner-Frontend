@@ -260,6 +260,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
     if (cachedQuestion) {
       setCurrentQuestion(cachedQuestion)
       setIsLoading(false)
+      startRequestRef.current = false
       return
     }
 
@@ -279,6 +280,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
       if (!mountedRef.current) return
       setLoadError(error instanceof Error ? error.message : 'Failed to start viva session')
     } finally {
+      startRequestRef.current = false
       if (mountedRef.current) setIsLoading(false)
     }
   }, [sessionId])

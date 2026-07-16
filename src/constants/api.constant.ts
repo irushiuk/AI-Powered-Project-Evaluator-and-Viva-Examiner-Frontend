@@ -55,6 +55,7 @@ export const SESSIONS_API = {
   endViva: (id: string) => `${API_BASE}/sessions/${id}/end-viva/`,
   myStatus: `${API_BASE}/sessions/my-status/`,
   agoraToken: (id: string) => `${API_BASE}/sessions/${id}/agora-token/`,
+  agoraRoster: (id: string) => `${API_BASE}/sessions/${id}/agora-roster/`,
 }
 
 export const VIVA_API = {
