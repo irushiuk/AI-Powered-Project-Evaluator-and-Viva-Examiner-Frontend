@@ -15,7 +15,11 @@ export const sessionService = {
     const res = await apiFetch(PROJECTS_API.sessions(projectId))
     if (!res.ok) throw new Error('Failed to fetch sessions')
     const data = await res.json()
-    return data.data ?? data
+    const items = data.data ?? data
+    return (Array.isArray(items) ? items : []).map((item: any) => ({
+      ...item,
+      id: item.session_id || item.id,
+    }))
   },
 
   /** POST /projects/:id/sessions/schedule/auto/ */
@@ -30,7 +34,11 @@ export const sessionService = {
       throw new Error(err.message || 'Auto-scheduling failed')
     }
     const data = await res.json()
-    return data.data ?? data
+    const items = data.data ?? data
+    return (Array.isArray(items) ? items : []).map((item: any) => ({
+      ...item,
+      id: item.session_id || item.id,
+    }))
   },
 
   /** POST /projects/:id/sessions/schedule/manual/ */
@@ -45,7 +53,11 @@ export const sessionService = {
       throw new Error(err.message || 'Manual scheduling failed')
     }
     const data = await res.json()
-    return data.data ?? data
+    const items = data.data ?? data
+    return (Array.isArray(items) ? items : []).map((item: any) => ({
+      ...item,
+      id: item.session_id || item.id,
+    }))
   },
 
   /** PUT /projects/:pid/sessions/:sid/update/ */
@@ -64,7 +76,11 @@ export const sessionService = {
       throw new Error(err.message || 'Failed to update session')
     }
     const data = await res.json()
-    return data.data ?? data
+    const item = data.data ?? data
+    return {
+      ...item,
+      id: item.session_id || item.id,
+    }
   },
 
   /** DELETE /projects/:id/sessions/reset/ */

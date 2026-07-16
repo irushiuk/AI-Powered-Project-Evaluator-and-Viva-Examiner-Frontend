@@ -12,7 +12,11 @@ export const vivaQuestionService = {
     const res = await apiFetch(PROJECTS_API.vivaQuestions(projectId))
     if (!res.ok) throw new Error('Failed to fetch viva questions')
     const data = await res.json()
-    return data.data ?? data
+    const items = data.data ?? data
+    return (Array.isArray(items) ? items : []).map((item: any) => ({
+      ...item,
+      id: item.question_id || item.id,
+    }))
   },
 
   /** POST /projects/:id/viva/questions/create/ */
@@ -30,7 +34,11 @@ export const vivaQuestionService = {
       throw new Error(err.message || 'Failed to create question')
     }
     const data = await res.json()
-    return data.data ?? data
+    const item = data.data ?? data
+    return {
+      ...item,
+      id: item.question_id || item.id,
+    }
   },
 
   /** PUT /projects/:pid/viva/questions/:qid/update/ */
@@ -49,7 +57,11 @@ export const vivaQuestionService = {
       throw new Error(err.message || 'Failed to update question')
     }
     const data = await res.json()
-    return data.data ?? data
+    const item = data.data ?? data
+    return {
+      ...item,
+      id: item.question_id || item.id,
+    }
   },
 
   /** DELETE /projects/:pid/viva/questions/:qid/delete/ */

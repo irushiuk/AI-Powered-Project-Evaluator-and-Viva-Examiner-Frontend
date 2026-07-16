@@ -20,10 +20,11 @@ export default function FaceEnrollmentCard() {
   const [hasPhoto, setHasPhoto] = useState<boolean | null>(null)
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [capturing, setCapturing] = useState(false)
+  const [stream, setStream] = useState<MediaStream | null>(null)
+  const [cameraReady, setCameraReady] = useState(false)
+  const [starting, setStarting] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -45,27 +46,59 @@ export default function FaceEnrollmentCard() {
   }, [])
 
   const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop())
-    streamRef.current = null
-    setCapturing(false)
+    setStream((current) => {
+      current?.getTracks().forEach((t) => t.stop())
+      return null
+    })
+    setCameraReady(false)
   }, [])
 
+  // Release the camera if the card unmounts mid-capture.
   useEffect(() => stopCamera, [stopCamera])
 
+  /**
+   * Attach the stream once BOTH the stream and the <video> element exist.
+   * Doing this in an effect (rather than a setTimeout after setState) is what
+   * makes capture reliable: the element is guaranteed to be committed here, so
+   * srcObject is always set and videoWidth actually becomes non-zero.
+   */
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !stream) return
+
+    video.srcObject = stream
+    video.play().catch((err) => {
+      // Never silent: a video that won't play means capture can't work.
+      console.warn('Face camera preview failed to play:', err)
+      toast.error('Camera preview could not start. Try the Upload option.')
+    })
+
+    return () => {
+      video.srcObject = null
+    }
+  }, [stream])
+
   async function startCamera() {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      toast.error('Your browser blocks camera access here. Use Upload instead.')
+      return
+    }
+    setStarting(true)
+    setCameraReady(false)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
-      streamRef.current = stream
-      setCapturing(true)
-      // The element only exists once capturing is true.
-      window.setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
-          void videoRef.current.play().catch(() => {})
-        }
-      }, 0)
-    } catch {
-      toast.error('Could not access your camera.')
+      const media = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+      })
+      setStream(media)
+    } catch (err) {
+      console.warn('getUserMedia failed:', err)
+      toast.error(
+        err instanceof DOMException && err.name === 'NotAllowedError'
+          ? 'Camera permission denied. Allow it, or use Upload instead.'
+          : 'Could not access your camera. Use Upload instead.',
+      )
+    } finally {
+      setStarting(false)
     }
   }
 
@@ -78,6 +111,7 @@ export default function FaceEnrollmentCard() {
       stopCamera()
       toast.success('Face photo saved.')
     } catch (err) {
+      console.warn('Face photo upload failed:', err)
       toast.error(err instanceof Error ? err.message : 'Could not save your photo.')
     } finally {
       setSaving(false)
@@ -86,15 +120,26 @@ export default function FaceEnrollmentCard() {
 
   function capture() {
     const video = videoRef.current
-    if (!video || !video.videoWidth) return
+    if (!video || !video.videoWidth || !video.videoHeight) {
+      // Previously a silent return — the button appeared dead. Say so instead.
+      toast.error('Camera is still starting. Try again in a moment.')
+      return
+    }
+
     const canvas = document.createElement('canvas')
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
-    canvas.getContext('2d')?.drawImage(video, 0, 0)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      toast.error('Could not capture the photo.')
+      return
+    }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
     canvas.toBlob(
       (blob) => {
-        if (blob) void save(blob, 'face.jpg')
-        else toast.error('Could not capture the photo.')
+        if (blob && blob.size > 0) void save(blob, 'face.jpg')
+        else toast.error('Could not capture the photo. Try Upload instead.')
       },
       'image/jpeg',
       0.92,
@@ -117,6 +162,8 @@ export default function FaceEnrollmentCard() {
   }
 
   if (hasPhoto === null) return null
+
+  const capturing = stream !== null
 
   return (
     <Card className={hasPhoto ? '' : 'border-blue-200 bg-blue-50/50'}>
@@ -159,16 +206,18 @@ export default function FaceEnrollmentCard() {
               ref={videoRef}
               muted
               playsInline
+              autoPlay
+              onLoadedMetadata={() => setCameraReady(true)}
               className="h-32 w-44 rounded-lg border border-gray-200 bg-black object-cover"
             />
             <div className="flex gap-2">
-              <Button size="sm" onClick={capture} disabled={saving}>
+              <Button size="sm" onClick={capture} disabled={saving || !cameraReady}>
                 {saving ? (
                   <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                 ) : (
                   <Camera className="mr-1 h-3.5 w-3.5" />
                 )}
-                Take photo
+                {cameraReady ? 'Take photo' : 'Starting…'}
               </Button>
               <Button size="sm" variant="ghost" onClick={stopCamera} disabled={saving}>
                 <X className="h-3.5 w-3.5" />
@@ -177,8 +226,12 @@ export default function FaceEnrollmentCard() {
           </div>
         ) : (
           <div className="flex shrink-0 gap-2">
-            <Button size="sm" onClick={startCamera} disabled={saving}>
-              <Camera className="mr-1 h-3.5 w-3.5" />
+            <Button size="sm" onClick={startCamera} disabled={saving || starting}>
+              {starting ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Camera className="mr-1 h-3.5 w-3.5" />
+              )}
               {hasPhoto ? 'Retake' : 'Use camera'}
             </Button>
             <Button
