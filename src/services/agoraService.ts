@@ -6,6 +6,8 @@ export interface AgoraTokenData {
   channel: string
   token: string
   uid: number
+  screen_share_token?: string
+  screen_share_uid?: number
 }
 
 export const agoraService = {
@@ -22,5 +24,20 @@ export const agoraService = {
 
     const data = await res.json()
     return (data.data ?? data) as AgoraTokenData
+  },
+
+  async getAgoraRoster(sessionId: string): Promise<Record<number, string>> {
+    const res = await apiFetch(SESSIONS_API.agoraRoster(sessionId), {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    if (!res.ok) {
+      console.warn('Failed to retrieve Agora roster names — falling back to UIDs.')
+      return {}
+    }
+
+    const data = await res.json()
+    return (data.roster ?? {}) as Record<number, string>
   },
 }

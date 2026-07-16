@@ -50,6 +50,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
   const noticedUidsRef = useRef<Set<string | number>>(new Set())
   const [screenTrack, setScreenTrack] = useState<any>(null)
   const [remoteUsers, setRemoteUsers] = useState<any[]>([])
+  const [roster, setRoster] = useState<Record<number, string>>({})
   const [isJoined, setIsJoined] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [isCamOff, setIsCamOff] = useState(false)
@@ -58,6 +59,8 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
   const [pipWindow, setPipWindow] = useState<Window | null>(null)
 
   const clientRef = useRef<any>(null)
+  const screenClientRef = useRef<any>(null)
+  const credentialsRef = useRef<any>(null)
   const localVideoDivRef = useRef<HTMLDivElement>(null)
   const pinnedLocalVideoRef = useRef<HTMLDivElement>(null)
 
@@ -182,9 +185,17 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
         clientRef.current = client
 
-        // Fetch token from backend
+        // Fetch token and roster from backend
         const credentials = await agoraService.getAgoraToken(sessionId)
         if (!active) return
+        credentialsRef.current = credentials
+
+        try {
+          const rosterMap = await agoraService.getAgoraRoster(sessionId)
+          if (active) setRoster(rosterMap)
+        } catch (err) {
+          console.warn('Failed to load Agora roster names:', err)
+        }
 
         // Set up event listeners
         client.on('user-joined', (user) => {
@@ -194,13 +205,20 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
             noticedUidsRef.current.add(user.uid)
             toast.info(notice, { duration: 5000 })
           }
+          // Add user immediately on join
+          setRemoteUsers((prev) => {
+            if (prev.find((u) => u.uid === user.uid)) return prev
+            return [...prev, user]
+          })
         })
 
         client.on('user-published', async (user, mediaType) => {
           await client.subscribe(user, mediaType)
           if (mediaType === 'video') {
             setRemoteUsers((prev) => {
-              if (prev.find((u) => u.uid === user.uid)) return prev
+              if (prev.find((u) => u.uid === user.uid)) {
+                return prev.map((u) => u.uid === user.uid ? user : u)
+              }
               return [...prev, user]
             })
           }
@@ -211,8 +229,8 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
 
         client.on('user-unpublished', (user, mediaType) => {
           if (mediaType === 'video') {
-            setRemoteUsers((prev) => prev.filter((u) => u.uid !== user.uid))
-            setPinnedUid((prev) => (prev === user.uid ? null : prev))
+            // Keep the user in the roster, but clear the videoTrack so the UI displays the avatar placeholder
+            setRemoteUsers((prev) => prev.map((u) => u.uid === user.uid ? { ...u, videoTrack: undefined } : u))
           }
         })
 
@@ -347,6 +365,10 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
           } catch (e) {}
           screenTrackRef.current = null
         }
+        if (screenClientRef.current) {
+          try { await screenClientRef.current.leave() } catch (e) {}
+          screenClientRef.current = null
+        }
         if (clientRef.current) {
           try { await clientRef.current.leave() } catch (e) {}
           clientRef.current = null
@@ -389,6 +411,10 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
       setLocalVideoTrack(null)
       setScreenTrack(null)
 
+      if (screenClientRef.current) {
+        try { await screenClientRef.current.leave() } catch (e) {}
+        screenClientRef.current = null
+      }
       if (clientRef.current) {
         await clientRef.current.leave()
       }
@@ -426,19 +452,27 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
 
   const toggleScreenShare = async () => {
     console.log('DEBUG AgoraVideoRoom: toggleScreenShare invoked. clientJoined:', isJoined, 'current isSharingScreen:', isSharingScreen)
-    if (!clientRef.current || !isJoined) {
-      console.log('DEBUG AgoraVideoRoom: toggleScreenShare aborted because clientRef or isJoined is falsy')
+    if (!clientRef.current || !isJoined || !credentialsRef.current) {
+      console.log('DEBUG AgoraVideoRoom: toggleScreenShare aborted because clientRef, isJoined, or credentialsRef is falsy')
       return
     }
 
     try {
       const AgoraRTC = (await import('agora-rtc-sdk-ng')).default
+      const creds = credentialsRef.current
 
       if (isSharingScreen) {
-        console.log('DEBUG AgoraVideoRoom: Stopping screen share...')
+        console.log('DEBUG AgoraVideoRoom: Stopping screen share (secondary client)...')
         if (screenTrackRef.current) {
-          console.log('DEBUG AgoraVideoRoom: Unpublishing and closing screenTrackRef:', screenTrackRef.current)
-          await clientRef.current.unpublish(screenTrackRef.current)
+          if (screenClientRef.current) {
+            try {
+              console.log('DEBUG AgoraVideoRoom: Unpublishing from screenClient...')
+              await screenClientRef.current.unpublish(screenTrackRef.current)
+            } catch (err) {
+              console.warn('Unpublish from screenClient failed:', err)
+            }
+          }
+          
           const track = screenTrackRef.current
           if (Array.isArray(track)) {
             track.forEach((t: any) => {
@@ -451,35 +485,50 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
           }
           screenTrackRef.current = null
         }
+
+        if (screenClientRef.current) {
+          try {
+            await screenClientRef.current.leave()
+          } catch (err) {
+            console.warn('Leave from screenClient failed:', err)
+          }
+          screenClientRef.current = null
+        }
+
         setScreenTrack(null)
         setIsSharingScreen(false)
         if (onScreenShareChangeRef.current) {
           console.log('DEBUG AgoraVideoRoom: notifying parent screen share stopped')
           onScreenShareChangeRef.current(false, null)
         }
-
-        if (localVideoTrackRef.current && !isCamOff) {
-          try {
-            console.log('DEBUG AgoraVideoRoom: republishing local camera track')
-            await clientRef.current.publish(localVideoTrackRef.current)
-          } catch (pubErr) {
-            console.warn('Failed to publish camera track after screen share:', pubErr)
-          }
-        }
       } else {
+        if (!creds.screen_share_token || !creds.screen_share_uid) {
+          toast.error('Screen sharing is not configured. Missing credentials from backend.')
+          return
+        }
+
         console.log('DEBUG AgoraVideoRoom: Calling AgoraRTC.createScreenVideoTrack({}, "auto")...')
         const screenTrackResult = await AgoraRTC.createScreenVideoTrack({}, 'auto')
         console.log('DEBUG AgoraVideoRoom: createScreenVideoTrack resolved successfully:', screenTrackResult)
         screenTrackRef.current = screenTrackResult
         setScreenTrack(screenTrackResult)
 
-        if (localVideoTrackRef.current) {
-          console.log('DEBUG AgoraVideoRoom: unpublishing camera track before publishing screen track')
-          await clientRef.current.unpublish(localVideoTrackRef.current)
-        }
-        console.log('DEBUG AgoraVideoRoom: publishing screen track to client')
-        await clientRef.current.publish(screenTrackResult)
-        console.log('DEBUG AgoraVideoRoom: published screen track successfully')
+        // Create and connect the secondary screen sharing client
+        console.log('DEBUG AgoraVideoRoom: Creating secondary screen share client...')
+        const screenClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
+        screenClientRef.current = screenClient
+
+        console.log('DEBUG AgoraVideoRoom: screenClient joining room...')
+        await screenClient.join(
+          creds.app_id,
+          creds.channel,
+          creds.screen_share_token,
+          creds.screen_share_uid
+        )
+
+        console.log('DEBUG AgoraVideoRoom: publishing screen track to secondary client...')
+        await screenClient.publish(screenTrackResult)
+        console.log('DEBUG AgoraVideoRoom: published screen track successfully on secondary client')
 
         const videoTrack = Array.isArray(screenTrackResult) ? screenTrackResult[0] : screenTrackResult;
         videoTrack.on('track-ended', () => {
@@ -497,6 +546,31 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
       console.error('DEBUG AgoraVideoRoom: Screen share error caught:', err)
       toast.error('Failed to share screen.')
     }
+  }
+
+  const isScreenShareUid = (uid: any) => typeof uid === 'number' && uid >= 1000000000
+  const getRealUidFromScreenShare = (uid: number) => uid - 1000000000
+
+  const remoteScreenShare = remoteUsers.find((u) => isScreenShareUid(u.uid))
+  const activeScreenShare = remoteScreenShare || (isSharingScreen ? { uid: 'local_screen', videoTrack: screenTrack } : null)
+  
+  // Filter out screen share users from the regular video grid and thumbnail row
+  const regularRemoteUsers = remoteUsers.filter((u) => !isScreenShareUid(u.uid))
+
+  const isTheaterLayout = pinnedUid !== null || activeScreenShare !== null
+  const displayUid = pinnedUid !== null ? pinnedUid : (activeScreenShare ? activeScreenShare.uid : null)
+
+  let presenterTitle = ''
+  if (displayUid === 'local_screen') {
+    presenterTitle = 'You are presenting'
+  } else if (displayUid !== null && isScreenShareUid(displayUid)) {
+    const realUid = getRealUidFromScreenShare(displayUid as number)
+    const ownerName = roster[realUid] || `Participant (${realUid})`
+    presenterTitle = `${ownerName} is presenting`
+  } else if (displayUid === 'local') {
+    presenterTitle = 'You'
+  } else if (displayUid !== null) {
+    presenterTitle = roster[displayUid as number] || `Participant (${displayUid})`
   }
 
   return (
@@ -523,13 +597,13 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
               Bring the call back here
             </Button>
           </div>
-        ) : pinnedUid !== null ? (
+        ) : isTheaterLayout && displayUid !== null ? (
           /* ==================================================================
-             Theater Layout (Someone is Pinned to Main Stage)
+             Theater Layout (Someone is presenting or pinned)
              ================================================================== */
           <div className="flex-1 flex flex-col gap-4 min-h-0">
             <div className="relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-850 aspect-video flex-1 flex items-center justify-center shadow-lg">
-              {pinnedUid === 'local' ? (
+              {displayUid === 'local' ? (
                 <>
                   <div ref={pinnedLocalVideoRef} className="absolute inset-0 w-full h-full object-cover" />
                   {isCamOff && (
@@ -538,21 +612,28 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
                     </div>
                   )}
                 </>
+              ) : displayUid === 'local_screen' ? (
+                <LocalScreenShareStage screenTrack={screenTrack} />
               ) : (
-                <PinnedRemoteVideo user={remoteUsers.find(u => u.uid === pinnedUid)} />
+                <PinnedRemoteVideo 
+                  user={remoteUsers.find(u => u.uid === displayUid)} 
+                  displayName={presenterTitle}
+                />
               )}
               
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setPinnedUid(null)}
-                className="absolute top-3 right-3 bg-black/60 border-white/10 hover:bg-black/80 rounded-lg text-white backdrop-blur-md"
-              >
-                Unpin Stage
-              </Button>
+              {pinnedUid !== null && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPinnedUid(null)}
+                  className="absolute top-3 right-3 bg-black/60 border-white/10 hover:bg-black/80 rounded-lg text-white backdrop-blur-md z-20"
+                >
+                  Unpin Stage
+                </Button>
+              )}
               
               <span className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-md text-xs font-semibold backdrop-blur-md border border-white/10 tracking-wide z-10">
-                {pinnedUid === 'local' ? 'You' : `Participant (${pinnedUid})`}
+                {presenterTitle}
               </span>
             </div>
 
@@ -569,25 +650,26 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
                 </div>
               )}
 
-              {remoteUsers.map((user) => (
-                pinnedUid !== user.uid && (
+              {regularRemoteUsers.map((user) => {
+                const displayName = roster[user.uid] || `Participant (${user.uid})`
+                return pinnedUid !== user.uid && (
                   <div
                     key={user.uid}
                     onClick={() => setPinnedUid(user.uid)}
                     className="relative rounded-xl overflow-hidden bg-slate-900 border border-slate-800 w-44 aspect-video flex items-center justify-center cursor-pointer hover:border-slate-600 transition duration-300 shrink-0"
                   >
-                    <ThumbnailRemoteVideo user={user} />
-                    <span className="absolute bottom-1 left-2 bg-black/60 px-2 py-0.5 rounded-md text-[10px] font-semibold">
-                      UID ({user.uid})
+                    <ThumbnailRemoteVideo user={user} displayName={displayName} />
+                    <span className="absolute bottom-1 left-2 bg-black/60 px-2 py-0.5 rounded-md text-[10px] font-semibold max-w-[90%] truncate">
+                      {displayName}
                     </span>
                   </div>
                 )
-              ))}
+              })}
             </div>
           </div>
         ) : (
           /* ==================================================================
-             Standard Grid Layout
+             Standard Grid Layout (Normal grid view)
              ================================================================== */
           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="relative rounded-xl overflow-hidden bg-slate-900 border border-slate-850 aspect-video flex items-center justify-center shadow-inner">
@@ -604,11 +686,16 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
               </span>
             </div>
 
-            {remoteUsers.map((user) => (
-              <RemoteVideoTile key={user.uid} user={user} onPin={() => setPinnedUid(user.uid)} />
+            {regularRemoteUsers.map((user) => (
+              <RemoteVideoTile 
+                key={user.uid} 
+                user={user} 
+                onPin={() => setPinnedUid(user.uid)}
+                displayName={roster[user.uid] || `Participant (${user.uid})`}
+              />
             ))}
 
-            {remoteUsers.length === 0 && (
+            {regularRemoteUsers.length === 0 && (
               <div className="flex items-center justify-center rounded-xl bg-slate-900/30 border border-dashed border-slate-800/80 p-8 text-center text-slate-500 text-sm md:col-span-2">
                 Waiting for other participants to join...
               </div>
@@ -679,17 +766,20 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
 
           {/* Videos Grid inside floating panel */}
           <div className="flex-1 flex flex-col gap-3 min-h-0 overflow-y-auto mb-3 scrollbar-none">
-            {remoteUsers.map((user) => (
-              <div 
-                key={user.uid} 
-                className="relative rounded-xl overflow-hidden aspect-video bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 shadow-inner"
-              >
-                <ThumbnailRemoteVideo user={user} />
-                <span className="absolute bottom-2 left-2 bg-black/60 px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide">
-                  Participant ({user.uid})
-                </span>
-              </div>
-            ))}
+            {regularRemoteUsers.map((user) => {
+              const displayName = roster[user.uid] || `Participant (${user.uid})`;
+              return (
+                <div 
+                  key={user.uid} 
+                  className="relative rounded-xl overflow-hidden aspect-video bg-slate-900 border border-slate-800 flex items-center justify-center shrink-0 shadow-inner"
+                >
+                  <ThumbnailRemoteVideo user={user} displayName={displayName} />
+                  <span className="absolute bottom-2 left-2 bg-black/60 px-2 py-0.5 rounded text-[10px] font-semibold tracking-wide">
+                    {displayName}
+                  </span>
+                </div>
+              );
+            })}
             
             {remoteUsers.length === 0 && (
               <div className="flex-1 flex items-center justify-center text-center text-xs text-slate-500 border border-dashed border-slate-850 rounded-xl p-4">
@@ -734,18 +824,23 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
   )
 }
 
-function PinnedRemoteVideo({ user }: { user: any }) {
+function LocalScreenShareStage({ screenTrack }: { screenTrack: any }) {
   const containerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    if (user?.videoTrack && containerRef.current) {
-      user.videoTrack.play(containerRef.current)
+    if (screenTrack && containerRef.current) {
+      const track = Array.isArray(screenTrack) ? screenTrack[0] : screenTrack
+      track.play(containerRef.current)
     }
-  }, [user?.videoTrack, user?.uid])
+    return () => {
+      const track = Array.isArray(screenTrack) ? screenTrack[0] : screenTrack
+      track?.stop()
+    }
+  }, [screenTrack])
 
   return <div ref={containerRef} className="absolute inset-0 w-full h-full object-contain bg-black" />
 }
 
-function ThumbnailRemoteVideo({ user }: { user: any }) {
+function PinnedRemoteVideo({ user, displayName }: { user: any; displayName: string }) {
   const containerRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (user?.videoTrack && containerRef.current) {
@@ -753,15 +848,47 @@ function ThumbnailRemoteVideo({ user }: { user: any }) {
     }
   }, [user?.videoTrack, user?.uid])
 
-  return <div ref={containerRef} className="absolute inset-0 w-full h-full object-cover" />
+  return (
+    <>
+      <div ref={containerRef} className="absolute inset-0 w-full h-full object-contain bg-black" />
+      {!user?.videoTrack && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+          <div className="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center shadow-lg border border-slate-700">
+            <User className="w-12 h-12 text-slate-400" />
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+function ThumbnailRemoteVideo({ user, displayName }: { user: any; displayName: string }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (user?.videoTrack && containerRef.current) {
+      user.videoTrack.play(containerRef.current)
+    }
+  }, [user?.videoTrack, user?.uid])
+
+  return (
+    <>
+      <div ref={containerRef} className="absolute inset-0 w-full h-full object-cover" />
+      {!user?.videoTrack && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+          <User className="w-6 h-6 text-slate-500" />
+        </div>
+      )}
+    </>
+  )
 }
 
 interface RemoteVideoTileProps {
   user: any
   onPin: () => void
+  displayName: string
 }
 
-function RemoteVideoTile({ user, onPin }: RemoteVideoTileProps) {
+function RemoteVideoTile({ user, onPin, displayName }: RemoteVideoTileProps) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -800,6 +927,14 @@ function RemoteVideoTile({ user, onPin }: RemoteVideoTileProps) {
     <div className="relative rounded-xl overflow-hidden bg-slate-900 border border-slate-850 aspect-video flex items-center justify-center shadow-inner group">
       <div ref={containerRef} className="absolute inset-0 w-full h-full object-cover" />
       
+      {!user.videoTrack && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
+          <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center shadow-lg border border-slate-700">
+            <User className="w-8 h-8 text-slate-400" />
+          </div>
+        </div>
+      )}
+
       {/* Overlay controls */}
       <div className="absolute top-3 right-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
         {/* Pin Button */}
@@ -823,8 +958,8 @@ function RemoteVideoTile({ user, onPin }: RemoteVideoTileProps) {
         )}
       </div>
 
-      <span className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-md text-xs font-semibold backdrop-blur-md border border-white/10 tracking-wide">
-        Participant ({user.uid})
+      <span className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-md text-xs font-semibold backdrop-blur-md border border-white/10 tracking-wide z-10">
+        {displayName}
       </span>
     </div>
   )
