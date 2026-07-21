@@ -29,8 +29,28 @@ const analysisStatusConfig: Record<
     icon: Clock,
     colorClass: "bg-yellow-50 text-yellow-700 border-yellow-200",
   },
+  fetching: {
+    label: "Fetching code...",
+    icon: Loader2,
+    colorClass: "bg-blue-50 text-blue-700 border-blue-200",
+  },
   processing: {
     label: "Analysing...",
+    icon: Loader2,
+    colorClass: "bg-blue-50 text-blue-700 border-blue-200",
+  },
+  scanning: {
+    label: "Scanning code...",
+    icon: Loader2,
+    colorClass: "bg-blue-50 text-blue-700 border-blue-200",
+  },
+  summarizing: {
+    label: "Summarizing code...",
+    icon: Loader2,
+    colorClass: "bg-blue-50 text-blue-700 border-blue-200",
+  },
+  questioning: {
+    label: "Generating questions...",
     icon: Loader2,
     colorClass: "bg-blue-50 text-blue-700 border-blue-200",
   },
@@ -189,7 +209,8 @@ function SubmissionCard({ submission: s }: { submission: Submission }) {
             >
               {(() => {
                 const IconComp = analysisStatusConfig[analysisStatus].icon;
-                return <IconComp className={`h-3.5 w-3.5 ${analysisStatus === 'processing' ? 'animate-spin' : ''}`} />;
+                const inProgress = ['processing', 'fetching', 'scanning', 'summarizing', 'questioning'].includes(analysisStatus)
+                return <IconComp className={`h-3.5 w-3.5 ${inProgress ? 'animate-spin' : ''}`} />;
               })()}
               {analysisStatusConfig[analysisStatus].label}
             </span>
