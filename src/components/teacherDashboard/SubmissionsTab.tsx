@@ -121,6 +121,7 @@ function SubmissionCard({ submission: s }: { submission: Submission }) {
   // only then flips status to "completed"). So track status locally and
   // refresh it from the real status endpoint on mount.
   const [status, setStatus] = useState(s.latest_code_analysis_status)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
 
   const [showCodeReport, setShowCodeReport] = useState(false)
   const [codeReport, setCodeReport] = useState<CodeAnalysisReport | null>(null)
@@ -134,7 +135,10 @@ function SubmissionCard({ submission: s }: { submission: Submission }) {
     const poll = async () => {
       try {
         const result = await codeAnalysisService.getStatus(s.latest_code_submission_id as string)
-        if (!cancelled) setStatus(result.analysis_status)
+        if (!cancelled) {
+          setStatus(result.analysis_status)
+          setAnalysisError(result.analysis_error)
+        }
       } catch {
         // Silently ignore; badge just keeps showing the last known status.
       }
@@ -196,7 +200,10 @@ function SubmissionCard({ submission: s }: { submission: Submission }) {
         <div className="flex flex-wrap items-center gap-2 shrink-0">
 
           {status && analysisStatusConfig[status] && (
-            <span className={`text-xs px-2.5 py-1 rounded-full border font-medium flex items-center gap-1.5 ${analysisStatusConfig[status].colorClass}`}>
+            <span
+              title={status === 'failed' && analysisError ? analysisError : undefined}
+              className={`text-xs px-2.5 py-1 rounded-full border font-medium flex items-center gap-1.5 ${analysisStatusConfig[status].colorClass}`}
+            >
               {(() => {
                 const IconComp = analysisStatusConfig[status].icon;
                 const inProgress = ['processing', 'fetching', 'scanning', 'summarizing', 'questioning'].includes(status)
