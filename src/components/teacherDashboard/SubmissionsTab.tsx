@@ -26,8 +26,28 @@ const analysisStatusConfig: Record<
     icon: Clock,
     colorClass: "bg-yellow-50 text-yellow-700 border-yellow-200",
   },
+  fetching: {
+    label: "Fetching code...",
+    icon: Loader2,
+    colorClass: "bg-blue-50 text-blue-700 border-blue-200",
+  },
   processing: {
     label: "Analysing",
+    icon: Loader2,
+    colorClass: "bg-blue-50 text-blue-700 border-blue-200",
+  },
+  scanning: {
+    label: "Scanning code...",
+    icon: Loader2,
+    colorClass: "bg-blue-50 text-blue-700 border-blue-200",
+  },
+  summarizing: {
+    label: "Summarizing code...",
+    icon: Loader2,
+    colorClass: "bg-blue-50 text-blue-700 border-blue-200",
+  },
+  questioning: {
+    label: "Generating questions...",
     icon: Loader2,
     colorClass: "bg-blue-50 text-blue-700 border-blue-200",
   },
@@ -93,11 +113,44 @@ export default function SubmissionsTab({ projectId }: { projectId: string }) {
 
 function SubmissionCard({ submission: s }: { submission: Submission }) {
   const [showPdf, setShowPdf] = useState(false)
-  const status = s.latest_code_analysis_status
+
+  // The submissions list only returns the raw stored analysis_status, which
+  // can get stuck at "scanning" forever unless something calls the
+  // status endpoint (which triggers refresh_submission on the backend:
+  // polls SonarCloud, computes quality, generates the final report, and
+  // only then flips status to "completed"). So track status locally and
+  // refresh it from the real status endpoint on mount.
+  const [status, setStatus] = useState(s.latest_code_analysis_status)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
 
   const [showCodeReport, setShowCodeReport] = useState(false)
   const [codeReport, setCodeReport] = useState<CodeAnalysisReport | null>(null)
   const [loadingCodeReport, setLoadingCodeReport] = useState(false)
+
+  useEffect(() => {
+    if (!s.latest_code_submission_id) return
+    if (status === 'completed' || status === 'failed') return
+
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const result = await codeAnalysisService.getStatus(s.latest_code_submission_id as string)
+        if (!cancelled) {
+          setStatus(result.analysis_status)
+          setAnalysisError(result.analysis_error)
+        }
+      } catch {
+        // Silently ignore; badge just keeps showing the last known status.
+      }
+    }
+
+    poll()
+    const interval = setInterval(poll, 10000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [s.latest_code_submission_id, status])
 
 
   const handleViewCodeReport = async () => {
@@ -147,10 +200,14 @@ function SubmissionCard({ submission: s }: { submission: Submission }) {
         <div className="flex flex-wrap items-center gap-2 shrink-0">
 
           {status && analysisStatusConfig[status] && (
-            <span className={`text-xs px-2.5 py-1 rounded-full border font-medium flex items-center gap-1.5 ${analysisStatusConfig[status].colorClass}`}>
+            <span
+              title={status === 'failed' && analysisError ? analysisError : undefined}
+              className={`text-xs px-2.5 py-1 rounded-full border font-medium flex items-center gap-1.5 ${analysisStatusConfig[status].colorClass}`}
+            >
               {(() => {
                 const IconComp = analysisStatusConfig[status].icon;
-                return <IconComp className={`h-3.5 w-3.5 ${status === 'processing' ? 'animate-spin' : ''}`} />;
+                const inProgress = ['processing', 'fetching', 'scanning', 'summarizing', 'questioning'].includes(status)
+                return <IconComp className={`h-3.5 w-3.5 ${inProgress ? 'animate-spin' : ''}`} />;
               })()}
               {analysisStatusConfig[status].label}
             </span>

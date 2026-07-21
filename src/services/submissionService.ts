@@ -12,7 +12,7 @@ export type Submission = {
   github_repo_url: string
   submitted_at: string
   latest_code_submission_id: string | null
-  latest_code_analysis_status: 'pending' | 'processing' | 'completed' | 'failed' | null
+  latest_code_analysis_status: 'pending' | 'fetching' | 'scanning' | 'summarizing' | 'questioning' | 'completed' | 'failed' | null
 }
 
 export const submissionService = {
