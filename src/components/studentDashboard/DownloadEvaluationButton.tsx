@@ -11,7 +11,7 @@ type DownloadEvaluationButtonProps = {
 export function DownloadEvaluationButton({ results }: DownloadEvaluationButtonProps) {
   const handleDirectPdfDownload = async () => {
     // 1. Dynamically load html2pdf.js if not already loaded
-    if (!window.html2pdf) {
+    if (!(window as any).html2pdf) {
       await new Promise<void>((resolve, reject) => {
         const script = document.createElement('script')
         script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js'

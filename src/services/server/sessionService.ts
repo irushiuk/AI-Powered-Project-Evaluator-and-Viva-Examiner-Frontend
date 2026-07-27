@@ -39,6 +39,7 @@ type VivaSessionReport = {
     gaps?: string
     examiner_recommendation?: string
   }
+  transcript?: any[]
 }
 
 type SonarSummary = {

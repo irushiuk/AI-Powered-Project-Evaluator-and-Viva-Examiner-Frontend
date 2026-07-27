@@ -102,6 +102,7 @@ export const MOCK_SESSIONS: Record<string, StudentSession> = {
     status: 'completed',
     description: 'Project evaluation completed',
     results: {
+      transcript: [],
       score: 92,
       grade: 'A',
       summary:
@@ -163,6 +164,7 @@ export const MOCK_SESSIONS: Record<string, StudentSession> = {
     status: 'completed',
     description: 'Comprehensive evaluation completed',
     results: {
+      transcript: [],
       score: 88,
       grade: 'A',
       summary:
@@ -213,6 +215,7 @@ export const MOCK_SESSIONS: Record<string, StudentSession> = {
     status: 'completed',
     description: 'Mobile application project review',
     results: {
+      transcript: [],
       score: 85,
       grade: 'A',
       summary: 'Great mobile app implementation with good UI/UX design.',
