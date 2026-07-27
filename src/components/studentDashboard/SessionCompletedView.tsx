@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { SessionResults } from './sessionTypes'
+import { DownloadEvaluationButton } from './DownloadEvaluationButton'
 
 type SessionCompletedViewProps = {
   results: SessionResults
@@ -29,11 +30,11 @@ export function SessionCompletedView({ results }: SessionCompletedViewProps) {
   return (
     <Tabs defaultValue="overview" className="w-full">
       <TabsList className="grid w-full grid-cols-5">
-        <TabsTrigger value="overview">Overview</TabsTrigger>
-        <TabsTrigger value="submission">Submission</TabsTrigger>
-        <TabsTrigger value="analysis">Code Analysis</TabsTrigger>
-        <TabsTrigger value="evaluation">AI Evaluation</TabsTrigger>
-        <TabsTrigger value="report">Final Report</TabsTrigger>
+        <TabsTrigger value="overview" className="data-[state=active]:!bg-blue-600 data-[state=active]:!text-white">Overview</TabsTrigger>
+        <TabsTrigger value="submission" className="data-[state=active]:!bg-blue-600 data-[state=active]:!text-white">Submission</TabsTrigger>
+        <TabsTrigger value="analysis" className="data-[state=active]:!bg-blue-600 data-[state=active]:!text-white">Code Analysis</TabsTrigger>
+        <TabsTrigger value="evaluation" className="data-[state=active]:!bg-blue-600 data-[state=active]:!text-white">AI Evaluation</TabsTrigger>
+        <TabsTrigger value="report" className="data-[state=active]:!bg-blue-600 data-[state=active]:!text-white">Final Report</TabsTrigger>
       </TabsList>
 
       <TabsContent value="overview" className="space-y-4">
@@ -169,22 +170,52 @@ export function SessionCompletedView({ results }: SessionCompletedViewProps) {
 
       <TabsContent value="evaluation" className="space-y-4">
         <div className="space-y-4">
-          {results.aiEvaluation.map((item) => (
-            <Card key={item.criteria}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">{item.criteria}</CardTitle>
-                  <Badge className="bg-primary">{item.score}/10</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <Progress value={item.score * 10} />
-                  <p className="text-sm text-muted-foreground">{item.explanation}</p>
-                </div>
+          {results.transcript && results.transcript.length > 0 ? (
+            results.transcript.map((item, idx) => (
+              <Card key={idx}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <CardTitle className="text-base font-semibold leading-relaxed">
+                        <span className="text-muted-foreground mr-2">Q{idx + 1}.</span>
+                        {item.question_text}
+                      </CardTitle>
+                      <div className="flex gap-2 mt-2">
+                        <Badge variant="outline">{item.criterion}</Badge>
+                        <Badge variant="secondary">{item.difficulty}</Badge>
+                      </div>
+                    </div>
+                    {item.ai_answer_score !== null && (
+                      <Badge className="bg-primary flex-shrink-0 text-sm py-1 px-3">
+                        {item.ai_answer_score}/10
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-lg bg-muted/50 p-4 border border-border/50">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">Student Answer</Label>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                      {item.answer_text || <span className="italic text-muted-foreground">No answer provided</span>}
+                    </p>
+                  </div>
+                  
+                  <div className="rounded-lg bg-primary/5 p-4 border border-primary/10">
+                    <Label className="text-xs text-primary/70 uppercase tracking-wider mb-2 block">AI Reasoning</Label>
+                    <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
+                      {item.reasoning}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                No transcript available for this session.
               </CardContent>
             </Card>
-          ))}
+          )}
         </div>
       </TabsContent>
 
@@ -217,19 +248,9 @@ export function SessionCompletedView({ results }: SessionCompletedViewProps) {
               <p className="text-sm leading-relaxed text-muted-foreground">{results.feedback}</p>
             </div>
 
-            {results.submission.reportUrl ? (
-              <Button className="w-full" asChild>
-                <a href={results.submission.reportUrl} target="_blank" rel="noopener noreferrer">
-                  <FileDown className="mr-2 h-4 w-4" />
-                  Download Full Report (PDF)
-                </a>
-              </Button>
-            ) : (
-              <Button className="w-full" disabled>
-                <FileDown className="mr-2 h-4 w-4" />
-                Download Full Report (PDF)
-              </Button>
-            )}
+            <div className="grid gap-4 md:grid-cols-1">
+              <DownloadEvaluationButton results={results} />
+            </div>
           </CardContent>
         </Card>
       </TabsContent>

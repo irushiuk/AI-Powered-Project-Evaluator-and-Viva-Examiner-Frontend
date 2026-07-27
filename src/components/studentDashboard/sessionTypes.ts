@@ -30,6 +30,17 @@ export type AiEvaluationItem = {
   explanation: string
 }
 
+export type TranscriptItem = {
+  question_order: number
+  question_text: string
+  blooms_level: string
+  criterion: string
+  difficulty: string
+  answer_text: string
+  ai_answer_score: number | null
+  reasoning: string
+}
+
 export type SessionResults = {
   score: number
   grade: string
@@ -41,6 +52,7 @@ export type SessionResults = {
   }
   codeAnalysis: CodeAnalysis
   aiEvaluation: AiEvaluationItem[]
+  transcript: TranscriptItem[]
   feedback: string
 }
 
