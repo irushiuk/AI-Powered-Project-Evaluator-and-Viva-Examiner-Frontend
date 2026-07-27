@@ -169,9 +169,11 @@ export const serverSessionService = {
     const sonarMetrics = sonarSummary?.sonar_metrics ?? {}
     const dashboardMaintainability = sonarSummary?.sonar_dashboard?.maintainability?.rating
 
+    const score100 = Number(((report.overall_score ?? 0) * 100).toFixed(1))
+
     return {
-      score: report.overall_score ?? 0,
-      grade: scoreToGrade(report.overall_score ?? 0),
+      score: score100,
+      grade: scoreToGrade(score100),
       summary:
         report.xai_report?.overall_summary ||
         report.xai_report?.strengths ||
@@ -189,6 +191,7 @@ export const serverSessionService = {
         maintainability: mapMaintainability(dashboardMaintainability ?? sonarMetrics.maintainability_rating),
       },
       aiEvaluation: buildAiEvaluation(report),
+      transcript: report.transcript ?? [],
       feedback:
         report.xai_report?.examiner_recommendation ||
         report.xai_report?.gaps ||
