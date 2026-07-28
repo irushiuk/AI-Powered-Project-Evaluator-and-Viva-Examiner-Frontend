@@ -20,6 +20,7 @@ import {
   Sparkles,
   MapPin,
   FileText,
+  Monitor,
 } from "lucide-react"
 import { toast } from "sonner"
 import { formatColomboDateTime, formatColomboTime, getColomboTimezoneLabel } from "@/utils/datetime"
@@ -194,6 +195,13 @@ export default function SessionsTab({
                   >
                     <Pencil className="h-3 w-3" /> Edit
                   </button>
+                )}
+                {session.status === "in_progress" && (
+                  <Link href={`/dashboard/teacher/sessions/${session.id}/live-room`}>
+                    <button className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-1.5 rounded-lg transition flex items-center gap-1 font-semibold cursor-pointer">
+                      <Monitor className="h-3 w-3" /> Join Live Session
+                    </button>
+                  </Link>
                 )}
                 {session.status === "completed" && (
                   <Link href={`/dashboard/teacher/sessions/${session.id}/report`}>

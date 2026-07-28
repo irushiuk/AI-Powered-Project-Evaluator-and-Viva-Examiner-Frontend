@@ -170,7 +170,13 @@ function appendTranscript(previous: string, next: string) {
   return `${previous.trim()} ${cleanNext}`
 }
 
-export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
+export interface LiveVivaRoomProps {
+  sessionId: string
+  /** If true, renders the room in read-only mode for the examiner, hiding submit/skip buttons and disabling inputs. */
+  isExaminerView?: boolean
+}
+
+export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   const router = useRouter()
   const [currentQuestion, setCurrentQuestion] = useState<VivaQuestion | null>(null)
   const [answerText, setAnswerText] = useState('')
@@ -899,12 +905,14 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
         <div className="text-center space-y-4">
           <Loader2 className="mx-auto h-12 w-12 animate-spin text-blue-500" />
           <h2 className="text-2xl font-bold">
-            {isGeneratingQuestion ? 'Starting Viva Session' : 'Connecting to Room'}
+            {isExaminerView ? 'Joining Live Viva Room' : (isGeneratingQuestion ? 'Starting Viva Session' : 'Connecting to Room')}
           </h2>
           <p className="text-slate-400">
-            {isGeneratingQuestion 
-              ? 'Generating your first question from the evaluation rubric.' 
-              : 'Retrieving session details and setting up your media stream...'}
+            {isExaminerView
+              ? 'Connecting to the live evaluation and fetching the current question...'
+              : (isGeneratingQuestion 
+                ? 'Generating your first question from the evaluation rubric.' 
+                : 'Retrieving session details and setting up your media stream...')}
           </p>
         </div>
       </div>
@@ -954,6 +962,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
             className="rounded-none border-0"
             onLocalTracks={handleLocalTracks}
             remoteJoinNotice="Examiner joining now"
+            hideEndCallButton={true}
           />
         </div>
         
@@ -1016,6 +1025,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
               setScreenTrack(track)
             }}
             remoteJoinNotice="Examiner joining now"
+            hideEndCallButton={true}
           />
         </div>
         
@@ -1173,22 +1183,7 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
           </Button>
         </div>
 
-        {/* Previous Feedback */}
-        {lastFeedback && (
-          <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-300">Previous Feedback</span>
-              <Badge variant="outline" className="text-xs border-slate-700 text-slate-300">
-                {lastFeedback.score}/10
-              </Badge>
-            </div>
-            <div className="text-xs text-slate-400 space-y-1">
-              {lastFeedback.reasoning && <p>{lastFeedback.reasoning}</p>}
-              {lastFeedback.strengths && <p className="text-green-400/80">✓ {lastFeedback.strengths}</p>}
-              {lastFeedback.gaps && <p className="text-amber-400/80">△ {lastFeedback.gaps}</p>}
-            </div>
-          </div>
-        )}
+
       </div>
     </div>
   )
@@ -1285,6 +1280,9 @@ export function LiveVivaRoom({ sessionId }: { sessionId: string }) {
         extraControls={qaToggleButton}
         onMicToggle={handleMicToggle}
         onLocalTracks={handleLocalTracks}
+        hideEndCallButton={true}
+        initialMute={isExaminerView}
+        initialCamOff={isExaminerView}
         remoteJoinNotice="Examiner joining now"
         overlayContent={
           <>
