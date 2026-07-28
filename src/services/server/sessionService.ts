@@ -104,8 +104,16 @@ export const serverSessionService = {
     return data.data ?? data
   },
 
-  async getMySessions(status: SessionStatusFilter): Promise<StudentSessionSummary[]> {
-    const res = await serverFetch(SESSION_API.myStatus(status), {
+  async getMySessions(
+    status: SessionStatusFilter,
+    page?: number
+  ): Promise<{ count: number; results: StudentSessionSummary[] }> {
+    const query = new URLSearchParams()
+    if (status) query.append('status', status)
+    if (page) query.append('page', page.toString())
+
+    const url = query.toString() ? `${SESSION_API.myStatus()}?${query.toString()}` : SESSION_API.myStatus()
+    const res = await serverFetch(url, {
       method: 'GET',
     })
 
@@ -114,7 +122,11 @@ export const serverSessionService = {
     }
 
     const data = await res.json()
-    return data.data ?? data
+    const payload = data.data ?? data
+    return {
+      count: payload.count ?? 0,
+      results: payload.results ?? [],
+    }
   },
 
   async getMySession(projectId: string): Promise<SessionDetail> {
