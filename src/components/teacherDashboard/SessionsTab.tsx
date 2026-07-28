@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { sessionService } from "@/services/sessionService"
 import {
   Session,
@@ -18,6 +19,7 @@ import {
   Pencil,
   Sparkles,
   MapPin,
+  FileText,
 } from "lucide-react"
 import { toast } from "sonner"
 import { formatColomboDateTime, formatColomboTime, getColomboTimezoneLabel } from "@/utils/datetime"
@@ -192,6 +194,13 @@ export default function SessionsTab({
                   >
                     <Pencil className="h-3 w-3" /> Edit
                   </button>
+                )}
+                {session.status === "completed" && (
+                  <Link href={`/dashboard/teacher/sessions/${session.id}/report`}>
+                    <button className="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                      <FileText className="h-3 w-3" /> AI Analysis & Report
+                    </button>
+                  </Link>
                 )}
               </div>
             </div>
