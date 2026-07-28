@@ -35,9 +35,15 @@ export interface AgoraVideoRoomProps {
   /** Called whenever this user starts/stops sharing their screen. Lets the parent
    * show controls (e.g. "End Demo") only to the participant who is presenting. */
   onScreenShareChange?: (isSharing: boolean, track: any) => void
+  /** If true, the local microphone will be disabled immediately upon initialization (useful for observers). */
+  initialMute?: boolean
+  /** If true, the local camera will be disabled immediately upon initialization. */
+  initialCamOff?: boolean
+  /** If true, hides the default red PhoneOff end call button. */
+  hideEndCallButton?: boolean
 }
 
-export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle, onLocalTracks, remoteJoinNotice, onScreenShareChange }: AgoraVideoRoomProps) {
+export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle, onLocalTracks, remoteJoinNotice, onScreenShareChange, initialMute, initialCamOff, hideEndCallButton }: AgoraVideoRoomProps) {
   const [localVideoTrack, setLocalVideoTrack] = useState<any>(null)
   const [localAudioTrack, setLocalAudioTrack] = useState<any>(null)
   // Refs keep the join effect's dependency list unchanged ([sessionId]).
@@ -52,8 +58,8 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
   const [remoteUsers, setRemoteUsers] = useState<any[]>([])
   const [roster, setRoster] = useState<Record<number, string>>({})
   const [isJoined, setIsJoined] = useState(false)
-  const [isMuted, setIsMuted] = useState(false)
-  const [isCamOff, setIsCamOff] = useState(false)
+  const [isMuted, setIsMuted] = useState(initialMute ?? false)
+  const [isCamOff, setIsCamOff] = useState(initialCamOff ?? false)
   const [isSharingScreen, setIsSharingScreen] = useState(false)
   const [pinnedUid, setPinnedUid] = useState<number | 'local' | null>(null)
   const [pipWindow, setPipWindow] = useState<Window | null>(null)
@@ -310,6 +316,9 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         if (audioTrack) {
           localAudioTrackRef.current = audioTrack
           setLocalAudioTrack(audioTrack)
+          if (initialMute) {
+            await audioTrack.setEnabled(false)
+          }
         } else {
           setIsMuted(true)
         }
@@ -317,6 +326,9 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         if (videoTrack) {
           localVideoTrackRef.current = videoTrack
           setLocalVideoTrack(videoTrack)
+          if (initialCamOff) {
+            await videoTrack.setEnabled(false)
+          }
           if (localVideoDivRef.current) {
             videoTrack.play(localVideoDivRef.current)
           }
@@ -737,14 +749,16 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
             <Monitor className="w-5 h-5" />
           </Button>
 
-          <Button
-            variant="destructive"
-            size="icon"
-            onClick={leaveChannel}
-            className="rounded-full w-12 h-12 shadow-md transition-all duration-300 hover:scale-105"
-          >
-            <PhoneOff className="w-5 h-5" />
-          </Button>
+          {!hideEndCallButton && (
+            <Button
+              variant="destructive"
+              size="icon"
+              onClick={leaveChannel}
+              className="rounded-full w-12 h-12 shadow-md transition-all duration-300 hover:scale-105"
+            >
+              <PhoneOff className="w-5 h-5" />
+            </Button>
+          )}
 
           {/* Extra controls injected by parent */}
           {extraControls}
