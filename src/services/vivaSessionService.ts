@@ -124,4 +124,9 @@ export const vivaSessionService = {
     const res = await apiFetch(`${API_BASE}/sessions/${sessionId}/demo-queue-status/`)
     return readJson<any>(res, 'Failed to fetch queue status')
   },
+  /** Get the detailed session report containing AI thinking/strategy */
+  async getSessionDetailedReport(sessionId: string): Promise<any> {
+    const res = await apiFetch(VIVA_API.detailedReport(sessionId))
+    return readJson<any>(res, 'Failed to fetch detailed report')
+  },
 }
