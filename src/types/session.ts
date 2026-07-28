@@ -50,6 +50,7 @@ export type AutoSchedulePayload = {
   duration_per_slot_minutes: number
   location_room: string
   demo_enabled: boolean
+  max_total_questions?: number
 }
 
 // ── Manual scheduling payload ─────────────────────────────────────────────────
@@ -65,6 +66,7 @@ export type ManualSessionEntry = {
 export type ManualSchedulePayload = {
   sessions: ManualSessionEntry[]
   demo_enabled: boolean
+  max_total_questions?: number
 }
 
 // ── Update payload ────────────────────────────────────────────────────────────

@@ -39,6 +39,7 @@ type VivaSessionReport = {
     gaps?: string
     examiner_recommendation?: string
   }
+  transcript?: any[]
 }
 
 type SonarSummary = {
@@ -103,8 +104,16 @@ export const serverSessionService = {
     return data.data ?? data
   },
 
-  async getMySessions(status: SessionStatusFilter): Promise<StudentSessionSummary[]> {
-    const res = await serverFetch(SESSION_API.myStatus(status), {
+  async getMySessions(
+    status: SessionStatusFilter,
+    page?: number
+  ): Promise<{ count: number; results: StudentSessionSummary[] }> {
+    const query = new URLSearchParams()
+    if (status) query.append('status', status)
+    if (page) query.append('page', page.toString())
+
+    const url = query.toString() ? `${SESSION_API.myStatus()}?${query.toString()}` : SESSION_API.myStatus()
+    const res = await serverFetch(url, {
       method: 'GET',
     })
 
@@ -113,7 +122,11 @@ export const serverSessionService = {
     }
 
     const data = await res.json()
-    return data.data ?? data
+    const payload = data.data ?? data
+    return {
+      count: payload.count ?? 0,
+      results: payload.results ?? [],
+    }
   },
 
   async getMySession(projectId: string): Promise<SessionDetail> {
@@ -169,9 +182,11 @@ export const serverSessionService = {
     const sonarMetrics = sonarSummary?.sonar_metrics ?? {}
     const dashboardMaintainability = sonarSummary?.sonar_dashboard?.maintainability?.rating
 
+    const score100 = Number(((report.overall_score ?? 0) * 100).toFixed(1))
+
     return {
-      score: report.overall_score ?? 0,
-      grade: scoreToGrade(report.overall_score ?? 0),
+      score: score100,
+      grade: scoreToGrade(score100),
       summary:
         report.xai_report?.overall_summary ||
         report.xai_report?.strengths ||
@@ -189,6 +204,7 @@ export const serverSessionService = {
         maintainability: mapMaintainability(dashboardMaintainability ?? sonarMetrics.maintainability_rating),
       },
       aiEvaluation: buildAiEvaluation(report),
+      transcript: report.transcript ?? [],
       feedback:
         report.xai_report?.examiner_recommendation ||
         report.xai_report?.gaps ||
@@ -197,3 +213,4 @@ export const serverSessionService = {
     }
   },
 }
+

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { sessionService } from "@/services/sessionService"
 import {
   Session,
@@ -18,6 +19,7 @@ import {
   Pencil,
   Sparkles,
   MapPin,
+  FileText,
 } from "lucide-react"
 import { toast } from "sonner"
 import { formatColomboDateTime, formatColomboTime, getColomboTimezoneLabel } from "@/utils/datetime"
@@ -193,6 +195,13 @@ export default function SessionsTab({
                     <Pencil className="h-3 w-3" /> Edit
                   </button>
                 )}
+                {session.status === "completed" && (
+                  <Link href={`/dashboard/teacher/sessions/${session.id}/report`}>
+                    <button className="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-3 py-1.5 rounded-lg transition flex items-center gap-1">
+                      <FileText className="h-3 w-3" /> AI Analysis & Report
+                    </button>
+                  </Link>
+                )}
               </div>
             </div>
           ))}
@@ -246,6 +255,7 @@ function AutoScheduleModal({
   const [duration, setDuration] = useState("")
   const [room, setRoom] = useState("")
   const [demoEnabled, setDemoEnabled] = useState(false)
+  const [maxTotalQuestions, setMaxTotalQuestions] = useState("10")
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -281,6 +291,7 @@ function AutoScheduleModal({
       duration_per_slot_minutes: Number(duration),
       location_room: room.trim(),
       demo_enabled: demoEnabled,
+      max_total_questions: Number(maxTotalQuestions) || undefined,
     }
     try {
       await sessionService.scheduleAuto(projectId, payload)
@@ -395,7 +406,6 @@ function AutoScheduleModal({
             {errors.room && <p className="text-red-500 text-xs mt-1">{errors.room}</p>}
           </div>
 
-          {/* Demo phase toggle */}
           <label className="flex items-start gap-3 cursor-pointer bg-gray-50 rounded-xl p-3">
             <input
               type="checkbox"
@@ -411,6 +421,23 @@ function AutoScheduleModal({
               </span>
             </span>
           </label>
+
+          {/* Max Questions Settings */}
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1.5 block">
+                Max Total Questions (Viva limit)
+              </label>
+              <input
+                type="number"
+                placeholder="e.g. 10"
+                min={1}
+                value={maxTotalQuestions}
+                onChange={(e) => setMaxTotalQuestions(e.target.value)}
+                className={`w-full ${inputBase}`}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="px-7 py-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50 rounded-b-2xl">
@@ -442,6 +469,7 @@ function ManualScheduleModal({
     { student_id: "", group_id: "", scheduled_start: "", scheduled_end: "", location_room: "" },
   ])
   const [demoEnabled, setDemoEnabled] = useState(false)
+  const [maxTotalQuestions, setMaxTotalQuestions] = useState("10")
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -480,8 +508,12 @@ function ManualScheduleModal({
       location_room: entry.location_room.trim(),
     }))
     try {
-      await sessionService.scheduleManual(projectId, { sessions, demo_enabled: demoEnabled })
-      toast.success("Sessions scheduled successfully")
+      await sessionService.scheduleManual(projectId, { 
+        sessions, 
+        demo_enabled: demoEnabled,
+        max_total_questions: Number(maxTotalQuestions) || undefined,
+      })
+      toast.success("Manual sessions scheduled successfully")
       onScheduled()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Manual scheduling failed")
@@ -594,6 +626,23 @@ function ManualScheduleModal({
               </span>
             </span>
           </label>
+
+          {/* Max Questions Settings */}
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                Max Total Questions (Viva limit)
+              </label>
+              <input
+                type="number"
+                placeholder="e.g. 10"
+                min={1}
+                value={maxTotalQuestions}
+                onChange={(e) => setMaxTotalQuestions(e.target.value)}
+                className={`w-full ${inputBase}`}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="px-7 py-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50 rounded-b-2xl">
