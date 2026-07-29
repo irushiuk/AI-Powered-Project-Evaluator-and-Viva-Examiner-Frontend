@@ -14,11 +14,12 @@ import RubricsTab from "@/components/teacherDashboard/RubircsTab"
 import VivaQuestionsTab from "@/components/teacherDashboard/VivaQuestionsTab"
 import SessionsTab from "@/components/teacherDashboard/SessionsTab"
 import SubmissionsTab from "@/components/teacherDashboard/SubmissionsTab"
+import ModuleContentTab from "@/components/teacherDashboard/ModuleContentTab"
 import { projectService } from "@/services/projectService"
 import { Project } from "@/types/project"
 import { toast } from "sonner"
 
-type Tab = "overview" | "rubrics" | "questions" | "sessions" | "submissions"
+type Tab = "overview" | "rubrics" | "questions" | "sessions" | "submissions" | "module-content"
 
 const TABS: { key: Tab; label: string}[] = [
   // { key: "overview",    label: "Overview"},
@@ -26,6 +27,7 @@ const TABS: { key: Tab; label: string}[] = [
   { key: "questions",   label: "Viva Questions"},
   { key: "sessions",    label: "Sessions"},
   { key: "submissions", label: "Submissions"},
+  { key: "module-content", label: "Module Content"},
 ]
 
 export default function ProjectDetailPage() {
@@ -145,6 +147,7 @@ export default function ProjectDetailPage() {
         {activeTab === "questions"   && <VivaQuestionsTab projectId={id} />}
         {activeTab === "sessions"    && <SessionsTab projectId={id} isGroupProject={project.is_group_project} />}
         {activeTab === "submissions" && <SubmissionsTab projectId={id} />}
+        {activeTab === "module-content" && <ModuleContentTab projectId={id} />}
       </div>
 
       </div>
