@@ -78,6 +78,7 @@ export default function SessionsTab({
     in_progress: "bg-yellow-50 text-yellow-600 border-yellow-200",
     completed:   "bg-green-50 text-green-600 border-green-200",
     pending:     "bg-gray-50 text-gray-500 border-gray-200",
+    expired:     "bg-red-50 text-red-600 border-red-200",
   }
 
   if (loading) {
@@ -154,10 +155,14 @@ export default function SessionsTab({
         </div>
       ) : (
         <div className="space-y-3">
-          {sessions.map((session, idx) => (
+          {sessions.map((session, idx) => {
+            const expiredNow = (session.status === 'scheduled' || session.status === 'in_progress') && new Date() > new Date(session.scheduled_end);
+            const displayStatus = expiredNow ? 'expired' : session.status;
+
+            return (
             <div
               key={session.id}
-              className="bg-white border border-gray-200 rounded-2xl p-5 flex items-center justify-between gap-4 flex-wrap"
+              className={`border rounded-2xl p-5 flex items-center justify-between gap-4 flex-wrap ${expiredNow ? 'bg-gray-50 border-red-100 opacity-90' : 'bg-white border-gray-200'}`}
             >
               <div className="flex items-center gap-4">
                 <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center text-sm font-bold shrink-0">
@@ -185,10 +190,10 @@ export default function SessionsTab({
               </div>
 
               <div className="flex items-center gap-2">
-                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium capitalize ${statusStyles[session.status] ?? statusStyles.pending}`}>
-                  {session.status.replace("_", " ")}
+                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium capitalize ${statusStyles[displayStatus] ?? statusStyles.pending}`}>
+                  {displayStatus.replace("_", " ")}
                 </span>
-                {session.status === "scheduled" && (
+                {displayStatus === "scheduled" && (
                   <button
                     onClick={() => setEditingSession(session)}
                     className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg transition flex items-center gap-1"
@@ -196,14 +201,14 @@ export default function SessionsTab({
                     <Pencil className="h-3 w-3" /> Edit
                   </button>
                 )}
-                {session.status === "in_progress" && (
+                {displayStatus === "in_progress" && (
                   <Link href={`/dashboard/teacher/sessions/${session.id}/live-room`}>
                     <button className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-1.5 rounded-lg transition flex items-center gap-1 font-semibold cursor-pointer">
                       <Monitor className="h-3 w-3" /> Join Live Session
                     </button>
                   </Link>
                 )}
-                {session.status === "completed" && (
+                {displayStatus === "completed" && (
                   <Link href={`/dashboard/teacher/sessions/${session.id}/report`}>
                     <button className="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-3 py-1.5 rounded-lg transition flex items-center gap-1">
                       <FileText className="h-3 w-3" /> AI Analysis & Report
@@ -212,7 +217,7 @@ export default function SessionsTab({
                 )}
               </div>
             </div>
-          ))}
+          )})}
         </div>
       )}
 
