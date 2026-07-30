@@ -163,6 +163,9 @@ function normalizeQuestion(data: Partial<VivaQuestion>): VivaQuestion | null {
   }
 }
 
+// Recognition errors that will not resolve by trying again on this page.
+const FATAL_SPEECH_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'audio-capture'])
+
 function appendTranscript(previous: string, next: string) {
   const cleanNext = next.trim()
   if (!cleanNext) return previous
@@ -189,6 +192,9 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
+  // Mirrors AgoraVideoRoom's own mute state, which starts unmuted — the mic is
+  // already live on join, so listening must not wait for a button press.
+  const [micMuted, setMicMuted] = useState(false)
   const [hasFinished, setHasFinished] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(true)
@@ -219,6 +225,10 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
   const startRequestRef = useRef(false)
+  // Set when the browser refuses the mic outright (permission denied, no
+  // hardware). Without it the auto-start effect would restart the recogniser
+  // the instant it fails and spin.
+  const micBlockedRef = useRef(false)
   const mountedRef = useRef(false)
 
   const presentationStartRef = useRef<number | null>(null)
@@ -557,6 +567,10 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     utterance.onend = () => setIsSpeaking(false)
     utterance.onerror = () => setIsSpeaking(false)
 
+    // Marked as speaking *before* speak() rather than waiting for onstart:
+    // onstart lands a tick later, and in that gap the auto-start effect would
+    // see an idle mic and start listening over the question.
+    setIsSpeaking(true)
     window.speechSynthesis.speak(utterance)
 
     // Auto-open Q&A panel when a new question arrives
@@ -566,6 +580,29 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       window.speechSynthesis.cancel()
     }
   }, [currentQuestion, examinerQuestion, hasFinished])
+
+  // Listen as soon as there is a question to answer and the mic is live —
+  // the student should be able to just speak. This also resumes listening
+  // after Chrome ends recognition on its own during a pause.
+  useEffect(() => {
+    if (hasFinished || isLoading || isSubmitting) return
+    if (phase !== 'viva_in_progress') return
+    if (!currentQuestion && !examinerQuestion) return
+    if (isSpeaking) return // wait for the AI to finish asking
+    if (micMuted || micBlockedRef.current || isRecording) return
+
+    startRecognition()
+  }, [
+    currentQuestion,
+    examinerQuestion,
+    isSpeaking,
+    micMuted,
+    isRecording,
+    isSubmitting,
+    hasFinished,
+    isLoading,
+    phase,
+  ])
 
   // Poll for examiner-interjected questions while the viva is running.
   useEffect(() => {
@@ -661,11 +698,10 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     loadFirstQuestion()
   }
 
-  const handleRecordingToggle = () => {
-    if (isRecording) {
-      stopRecognition()
-      return
-    }
+  // Deliberately does not touch speechSynthesis: this now runs the moment the
+  // AI finishes asking, and cancelling there would cut off the question.
+  const startRecognition = () => {
+    if (recognitionRef.current) return
 
     const speechWindow = window as SpeechRecognitionWindow
     const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition
@@ -675,8 +711,6 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       return
     }
 
-    window.speechSynthesis.cancel()
-    setIsSpeaking(false)
     setInterimTranscript('')
 
     const recognition = new Recognition()
@@ -706,11 +740,27 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     }
 
     recognition.onerror = (event) => {
+      // 'no-speech'/'aborted' are routine — silence, or our own stop() — and
+      // should not stop us listening. A permission or hardware refusal is
+      // permanent for this page, so latch it and tell the student to type.
+      if (FATAL_SPEECH_ERRORS.has(event.error ?? '')) {
+        micBlockedRef.current = true
+        setSpeechSupported(false)
+      }
+      if (recognitionRef.current !== recognition) return
+      recognitionRef.current = null
       setIsRecording(false)
       setInterimTranscript('')
     }
 
     recognition.onend = () => {
+      // A superseded recogniser can still fire onend after a newer one has
+      // taken over; letting it run would null out the live one's ref.
+      if (recognitionRef.current !== recognition) return
+      // Chrome ends 'continuous' recognition on its own after a stretch of
+      // silence. Releasing the ref lets the auto-start effect resume listening
+      // instead of leaving a dead recogniser parked here.
+      recognitionRef.current = null
       setIsRecording(false)
       setInterimTranscript('')
     }
@@ -720,17 +770,19 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     setIsRecording(true)
   }
 
-  // Called by Agora mic button — starts recording when unmuted, stops when muted
+  // Called by the Agora mic button. Muting stops listening; unmuting just
+  // clears the way — the auto-start effect below decides when to resume, so
+  // we never cut off a question that is still being asked.
   const handleMicToggle = (isMuted: boolean) => {
+    setMicMuted(isMuted)
+
     if (isMuted) {
-      // Mic turned OFF → stop recording
       if (isRecording) {
         stopRecognition()
         toast('Mic muted — recording stopped.', { icon: <MicOff className="h-4 w-4 text-slate-400" /> })
       }
     } else {
-      // Mic turned ON → start recording automatically
-      handleRecordingToggle()
+      micBlockedRef.current = false
       toast('Mic on — speak your answer.', { icon: <Mic className="h-4 w-4 text-green-500" /> })
     }
   }
@@ -1121,7 +1173,11 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
             <span className="text-xs text-slate-400">
               {isSpeaking && 'Examiner is speaking...'}
               {isRecording && <span className="text-red-400 font-medium">Transcribing: {formatTime(recordingTime)}</span>}
-              {!isSpeaking && !isRecording && <span className="text-slate-500">Unmute your mic to answer</span>}
+              {!isSpeaking && !isRecording && (
+                <span className="text-slate-500">
+                  {micMuted ? 'Unmute your mic to answer' : 'Starting to listen...'}
+                </span>
+              )}
             </span>
           </div>
           <p className="text-base font-medium text-slate-100 leading-relaxed">
@@ -1162,7 +1218,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
             size="sm"
             variant="outline"
             onClick={handleSkip}
-            disabled={isSubmitting || isRecording || !!examinerQuestion}
+            disabled={isSubmitting || !!examinerQuestion}
             className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
           >
             <SkipForward className="mr-1.5 h-3.5 w-3.5" />
@@ -1171,8 +1227,8 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
 
           <Button
             size="sm"
-            onClick={() => submitAnswer(answerText)}
-            disabled={isSubmitting || isRecording || !answerText.trim()}
+            onClick={() => submitAnswer(appendTranscript(answerText, interimTranscript))}
+            disabled={isSubmitting || (!answerText.trim() && !interimTranscript.trim())}
             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
           >
             {isSubmitting ? (
