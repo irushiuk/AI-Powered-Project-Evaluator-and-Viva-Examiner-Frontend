@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import React, { useTransition } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { AlertCircle, ArrowRight, Calendar, Clock, MapPin, Users, Loader2 } from 'lucide-react'
@@ -15,12 +15,11 @@ import type { NextSession, SessionStatusFilter, StudentSessionSummary } from '@/
 
 type MySessionsViewProps = {
   nextSession: NextSession | null
-  activeSessionsData: {
+  allSessionsData: {
     count: number
     results: StudentSessionSummary[]
   }
   initialTab: SessionStatusFilter
-  currentPage: number
 }
 
 const tabs: Array<{ value: SessionStatusFilter; label: string }> = [
@@ -116,27 +115,41 @@ function SessionCard({ session }: { session: StudentSessionSummary }) {
   )
 }
 
-export function MySessionsView({ nextSession, activeSessionsData, initialTab, currentPage }: MySessionsViewProps) {
+export function MySessionsView({ nextSession, allSessionsData, initialTab }: MySessionsViewProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const [isPending, startTransition] = useTransition()
+  const [activeTab, setActiveTab] = React.useState<SessionStatusFilter>(initialTab)
+  const [currentPage, setCurrentPage] = React.useState(1)
+  const itemsPerPage = 9
 
   const handleTabChange = (tab: string) => {
+    setActiveTab(tab as SessionStatusFilter)
+    setCurrentPage(1) // Reset to page 1 on tab change
+    
+    // Optionally update the URL without forcing a server trip (shallow)
     const params = new URLSearchParams(window.location.search)
     params.set('tab', tab)
-    params.delete('page') // Reset to page 1 on tab change
-    startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`)
-    })
+    window.history.replaceState(null, '', `${pathname}?${params.toString()}`)
   }
 
   const handlePageChange = (page: number) => {
-    const params = new URLSearchParams(window.location.search)
-    params.set('page', page.toString())
-    startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`)
-    })
+    setCurrentPage(page)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  // Client-Side State Filtering
+  const filteredSessions = React.useMemo(() => {
+    return allSessionsData.results.filter(session => {
+      const status = getFilterFromApiStatus(session.status, session.phase)
+      return status === activeTab
+    })
+  }, [allSessionsData.results, activeTab])
+
+  // Client-Side Pagination
+  const paginatedSessions = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage
+    return filteredSessions.slice(startIndex, startIndex + itemsPerPage)
+  }, [filteredSessions, currentPage])
 
   const renderSessionsGrid = (sessions: StudentSessionSummary[]) => {
     if (sessions.length === 0) {
@@ -162,7 +175,7 @@ export function MySessionsView({ nextSession, activeSessionsData, initialTab, cu
   }
 
   const nextStart = nextSession ? formatDateTime(nextSession.scheduled_start) : null
-  const totalPages = Math.ceil(activeSessionsData.count / 9)
+  const totalPages = Math.ceil(filteredSessions.length / itemsPerPage)
 
   return (
     <div className="space-y-8">
@@ -218,7 +231,7 @@ export function MySessionsView({ nextSession, activeSessionsData, initialTab, cu
 
       <div className='-mt-5'></div>
 
-      <Tabs value={initialTab} onValueChange={handleTabChange} className="w-full">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           {tabs.map((tab) => (
             <TabsTrigger
@@ -227,13 +240,16 @@ export function MySessionsView({ nextSession, activeSessionsData, initialTab, cu
               className="data-[state=active]:bg-primary! data-[state=active]:text-primary-foreground!"
             >
               {tab.label}
+              <span className="ml-2 text-xs opacity-70">
+                ({allSessionsData.results.filter(s => getFilterFromApiStatus(s.status, s.phase) === tab.value).length})
+              </span>
             </TabsTrigger>
           ))}
         </TabsList>
 
-        <TabsContent value={initialTab} className="mt-6 space-y-4">
-          <div className={isPending ? 'opacity-50 transition-opacity duration-200 ease-in-out' : 'transition-opacity duration-200 ease-in-out'}>
-            {renderSessionsGrid(activeSessionsData.results)}
+        <TabsContent value={activeTab} className="mt-6 space-y-4">
+          <div className="transition-opacity duration-200 ease-in-out">
+            {renderSessionsGrid(paginatedSessions)}
             {totalPages > 1 && (
               <Pagination
                 currentPage={currentPage}

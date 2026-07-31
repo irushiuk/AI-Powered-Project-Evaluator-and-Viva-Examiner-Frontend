@@ -129,6 +129,24 @@ export const serverSessionService = {
     }
   },
 
+  async getAllMySessions(): Promise<{ count: number; results: StudentSessionSummary[] }> {
+    const url = `${SESSION_API.myStatus()}?fetch_all=true`
+    const res = await serverFetch(url, {
+      method: 'GET',
+    })
+
+    if (!res.ok) {
+      throw new Error('Failed to fetch all sessions')
+    }
+
+    const data = await res.json()
+    const payload = data.data ?? data
+    return {
+      count: payload.count ?? 0,
+      results: payload.results ?? [],
+    }
+  },
+
   async getMySession(projectId: string): Promise<SessionDetail> {
     const res = await serverFetch(SESSION_API.mySession(projectId), {
       method: 'GET',

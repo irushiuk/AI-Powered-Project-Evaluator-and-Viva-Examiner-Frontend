@@ -11,19 +11,17 @@ export default async function SessionsPage({
 }) {
   const resolvedParams = await searchParams
   const activeTab = (resolvedParams.tab as SessionStatusFilter) || 'upcoming'
-  const page = Number(resolvedParams.page) || 1
 
-  const [nextSession, activeSessionsData] = await Promise.all([
+  const [nextSession, allSessionsData] = await Promise.all([
     serverSessionService.getNextSession().catch(() => null),
-    serverSessionService.getMySessions(activeTab, page).catch(() => ({ count: 0, results: [] })),
+    serverSessionService.getAllMySessions().catch(() => ({ count: 0, results: [] })),
   ])
 
   return (
     <MySessionsView
       nextSession={nextSession}
-      activeSessionsData={activeSessionsData}
+      allSessionsData={allSessionsData}
       initialTab={activeTab}
-      currentPage={page}
     />
   )
 }
