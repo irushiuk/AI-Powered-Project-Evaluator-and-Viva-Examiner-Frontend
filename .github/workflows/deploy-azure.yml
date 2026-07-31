@@ -25,6 +25,7 @@ jobs:
           script: |
             cd ~/AI-Powered-Project-Evaluator-and-Viva-Examiner-Frontend
             git pull origin main
+            echo "NEXT_PUBLIC_API_BASE=${{ secrets.NEXT_PUBLIC_API_BASE }}" > .env
             npm install --legacy-peer-deps
             npm run build
             pm2 restart viva-frontend
