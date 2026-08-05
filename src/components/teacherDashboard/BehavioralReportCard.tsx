@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Eye,
+  EyeOff,
   Loader2,
   MessageSquareText,
   Play,
@@ -84,6 +85,10 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
   }
 
   const artifact = summary?.artifact ?? null
+  // Flags carry a student_id, not a name — resolve it so a group viva's
+  // "Moments to review" says who, not just when.
+  const nameFor = (studentId?: string | null) =>
+    artifact?.per_student.find((s) => s.student_id === studentId)?.display_name ?? null
   const allFlags: CvIntegrityFlag[] = artifact
     ? [
         ...artifact.session_flags,
@@ -187,6 +192,7 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
                     <th className="pb-2 font-medium">Speaking</th>
                     <th className="pb-2 font-medium">Turns</th>
                     <th className="pb-2 font-medium">Attention</th>
+                    <th className="pb-2 font-medium">Look-aways</th>
                     <th className="pb-2 font-medium">Flags</th>
                   </tr>
                 </thead>
@@ -212,6 +218,18 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
                           <span className={attentionColor(s.attention_pct)}>
                             {s.attention_pct.toFixed(0)}%
                           </span>
+                        )}
+                      </td>
+                      <td className="py-2 text-gray-600">
+                        {s.off_screen_glance_count ? (
+                          <>
+                            {s.off_screen_glance_count}
+                            <span className="text-gray-400">
+                              {' '}({formatMs(s.off_screen_time_ms)} off screen)
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-gray-400">—</span>
                         )}
                       </td>
                       <td className="py-2 text-gray-600">
@@ -245,7 +263,14 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-left disabled:cursor-default"
                   >
                     {flagIcon(flag.kind)}
-                    <span className="flex-1 text-xs text-gray-700">{flag.note}</span>
+                    <span className="flex-1 text-xs text-gray-700">
+                      {nameFor(flag.student_id) && (
+                        <span className="font-medium text-gray-900">
+                          {nameFor(flag.student_id)}:{' '}
+                        </span>
+                      )}
+                      {flag.note}
+                    </span>
                     <span className="text-xs font-mono text-amber-700 flex items-center gap-1">
                       <Play className="w-3 h-3" /> {flag.video_timecode}
                     </span>
@@ -336,5 +361,6 @@ function attentionColor(pct: number): string {
 function flagIcon(kind: CvIntegrityFlag['kind']) {
   if (kind === 'student_absent') return <UserX className="w-3.5 h-3.5 text-amber-600 shrink-0" />
   if (kind === 'extra_person') return <Users className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+  if (kind === 'gaze_off_screen') return <EyeOff className="w-3.5 h-3.5 text-amber-600 shrink-0" />
   return <MessageSquareText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
 }

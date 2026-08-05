@@ -48,11 +48,14 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
   const [localAudioTrack, setLocalAudioTrack] = useState<any>(null)
   // Refs keep the join effect's dependency list unchanged ([sessionId]).
   const onLocalTracksRef = useRef(onLocalTracks)
-  onLocalTracksRef.current = onLocalTracks
   const remoteJoinNoticeRef = useRef(remoteJoinNotice)
-  remoteJoinNoticeRef.current = remoteJoinNotice
   const onScreenShareChangeRef = useRef(onScreenShareChange)
-  onScreenShareChangeRef.current = onScreenShareChange
+
+  useEffect(() => {
+    onLocalTracksRef.current = onLocalTracks
+    remoteJoinNoticeRef.current = remoteJoinNotice
+    onScreenShareChangeRef.current = onScreenShareChange
+  })
   const noticedUidsRef = useRef<Set<string | number>>(new Set())
   const [screenTrack, setScreenTrack] = useState<any>(null)
   const [remoteUsers, setRemoteUsers] = useState<any[]>([])

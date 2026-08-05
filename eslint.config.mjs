@@ -1,5 +1,6 @@
 import js from "@eslint/js"
 import tsPlugin from "typescript-eslint"
+import reactHooks from "eslint-plugin-react-hooks"
 
 export default [
   {
@@ -17,6 +18,9 @@ export default [
   ...tsPlugin.configs.recommended,
   {
     files: ["**/*.{ts,tsx,js,jsx}"],
+    plugins: {
+      "react-hooks": reactHooks,
+    },
     languageOptions: {
       parser: tsPlugin.parser,
       parserOptions: {
@@ -32,8 +36,12 @@ export default [
       },
     },
     rules: {
+      ...reactHooks.configs.recommended.rules,
+      "react-hooks/set-state-in-effect": "off",
       "no-console": "warn",
       "no-unused-vars": "off",
+      "no-empty": "warn",
+      "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-vars": [
         "warn",
         {
