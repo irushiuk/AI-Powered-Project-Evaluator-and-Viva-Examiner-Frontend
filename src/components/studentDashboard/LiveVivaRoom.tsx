@@ -173,6 +173,30 @@ function appendTranscript(previous: string, next: string) {
   return `${previous.trim()} ${cleanNext}`
 }
 
+/**
+ * Best available English voice for the AI examiner.
+ *
+ * Left unset, speechSynthesis picks the OS default — on Windows that is the
+ * decades-old local SAPI voice (David/Zira), which is where the robotic sound
+ * comes from. The good neural voices are already in the same list: Edge
+ * exposes "Microsoft … Online (Natural)", Chrome its Google voices. Both are
+ * cloud-backed, so a student offline falls back to the local voice.
+ *
+ * Must only be called in the browser — `window` does not exist during SSR.
+ */
+function pickVoice(): SpeechSynthesisVoice | null {
+  const en = window.speechSynthesis
+    .getVoices()
+    .filter((v) => v.lang.toLowerCase().startsWith('en'))
+  return (
+    en.find((v) => /Natural/i.test(v.name)) ??   // Edge neural — best
+    en.find((v) => /Online/i.test(v.name)) ??
+    en.find((v) => /Google/i.test(v.name)) ??    // Chrome — decent
+    en[0] ??
+    null
+  )
+}
+
 export interface LiveVivaRoomProps {
   sessionId: string
   /** If true, renders the room in read-only mode for the examiner, hiding submit/skip buttons and disabling inputs. */
@@ -230,6 +254,10 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   // the instant it fails and spin.
   const micBlockedRef = useRef(false)
   const mountedRef = useRef(false)
+  // Chosen TTS voice for the AI examiner. Held in a ref, not state: it is read
+  // inside the speak effect and must never re-trigger it — that would restart
+  // the question mid-sentence.
+  const voiceRef = useRef<SpeechSynthesisVoice | null>(null)
 
   const presentationStartRef = useRef<number | null>(null)
   const audioSequenceRef = useRef<number>(1)
@@ -554,6 +582,20 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     }
   }, [phase, screenTrack, demoAudioTrack, sessionId])
 
+  // Resolve the examiner's voice once, on mount. Browsers populate the voice
+  // list asynchronously — Chrome returns an EMPTY array on the first call — so
+  // pick now for the browsers that are ready, and again when the list lands.
+  useEffect(() => {
+    voiceRef.current = pickVoice()
+    const onVoicesChanged = () => {
+      voiceRef.current = pickVoice()
+    }
+    window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged)
+    return () => {
+      window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged)
+    }
+  }, [])
+
   useEffect(() => {
     if (hasFinished) return
     // The examiner's live question takes priority over the AI question.
@@ -563,6 +605,11 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     window.speechSynthesis.cancel()
 
     const utterance = new SpeechSynthesisUtterance(text)
+    // Null is a valid value here — it means "browser default", which is the
+    // correct fallback if the voice list has not arrived yet.
+    utterance.voice = voiceRef.current
+    utterance.rate = 0.95   // marginally slower reads as more deliberate
+    utterance.pitch = 1.0
     utterance.onstart = () => setIsSpeaking(true)
     utterance.onend = () => setIsSpeaking(false)
     utterance.onerror = () => setIsSpeaking(false)
