@@ -33,7 +33,8 @@ type SubmissionDetail = {
 type VivaSessionReport = {
   overall_score: number
   per_criterion_scores: Record<string, number>
-  xai_report: {
+  scores_status?: string
+  xai_report?: {
     overall_summary?: string
     strengths?: string
     gaps?: string
@@ -129,6 +130,24 @@ export const serverSessionService = {
     }
   },
 
+  async getAllMySessions(): Promise<{ count: number; results: StudentSessionSummary[] }> {
+    const url = `${SESSION_API.myStatus()}?fetch_all=true`
+    const res = await serverFetch(url, {
+      method: 'GET',
+    })
+
+    if (!res.ok) {
+      throw new Error('Failed to fetch all sessions')
+    }
+
+    const data = await res.json()
+    const payload = data.data ?? data
+    return {
+      count: payload.count ?? 0,
+      results: payload.results ?? [],
+    }
+  },
+
   async getMySession(projectId: string): Promise<SessionDetail> {
     const res = await serverFetch(SESSION_API.mySession(projectId), {
       method: 'GET',
@@ -187,6 +206,7 @@ export const serverSessionService = {
     return {
       score: score100,
       grade: scoreToGrade(score100),
+      scores_status: report.scores_status || 'draft',
       summary:
         report.xai_report?.overall_summary ||
         report.xai_report?.strengths ||

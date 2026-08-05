@@ -44,6 +44,7 @@ export type TranscriptItem = {
 export type SessionResults = {
   score: number
   grade: string
+  scores_status?: string
   summary: string
   submission: {
     repo: string
