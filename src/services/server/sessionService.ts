@@ -33,7 +33,8 @@ type SubmissionDetail = {
 type VivaSessionReport = {
   overall_score: number
   per_criterion_scores: Record<string, number>
-  xai_report: {
+  scores_status?: string
+  xai_report?: {
     overall_summary?: string
     strengths?: string
     gaps?: string
@@ -205,6 +206,7 @@ export const serverSessionService = {
     return {
       score: score100,
       grade: scoreToGrade(score100),
+      scores_status: report.scores_status || 'draft',
       summary:
         report.xai_report?.overall_summary ||
         report.xai_report?.strengths ||

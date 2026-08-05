@@ -129,4 +129,25 @@ export const vivaSessionService = {
     const res = await apiFetch(VIVA_API.detailedReport(sessionId))
     return readJson<any>(res, 'Failed to fetch detailed report')
   },
+
+  /** Examiner overrides the score of a single answer */
+  async patchAnswerScore(sessionId: string, answerId: string, overrideScore: number, overrideNote: string): Promise<any> {
+    const res = await apiFetch(VIVA_API.patchAnswerScore(sessionId, answerId), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        override_score: overrideScore,
+        override_note: overrideNote,
+      }),
+    })
+    return readJson<any>(res, 'Failed to update answer score')
+  },
+
+  /** Examiner approves all scores for the session */
+  async approveSessionScores(sessionId: string): Promise<any> {
+    const res = await apiFetch(VIVA_API.approveScores(sessionId), {
+      method: 'POST',
+    })
+    return readJson<any>(res, 'Failed to approve session scores')
+  },
 }
