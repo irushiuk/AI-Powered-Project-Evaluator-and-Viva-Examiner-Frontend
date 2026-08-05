@@ -6,7 +6,7 @@ import { CV_ANALYSIS_API } from '@/constants/api.constant'
 export interface CvIntegrityFlag {
   t_ms: number
   video_timecode: string
-  kind: 'unknown_face' | 'extra_person' | 'student_absent'
+  kind: 'unknown_face' | 'extra_person' | 'student_absent' | 'gaze_off_screen'
   note: string
   student_id?: string | null
 }
@@ -25,6 +25,9 @@ export interface CvStudentSummary {
   speaking_share: number
   turn_count: number
   attention_pct: number | null
+  /** Sustained look-aways: the count, and total time spent off screen. */
+  off_screen_glance_count: number
+  off_screen_time_ms: number
   integrity_flags: CvIntegrityFlag[]
 }
 
