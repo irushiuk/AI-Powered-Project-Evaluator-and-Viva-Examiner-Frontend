@@ -1,8 +1,6 @@
 import { MySessionsView } from '@/components/studentDashboard/MySessionsView'
 import { serverSessionService } from '@/services/server/sessionService'
-import type { SessionStatusFilter, SessionsByStatus } from '@/types/session'
-
-const statusFilters: SessionStatusFilter[] = ['upcoming', 'ongoing', 'completed']
+import type { SessionStatusFilter } from '@/types/session'
 
 export default async function SessionsPage({
   searchParams,

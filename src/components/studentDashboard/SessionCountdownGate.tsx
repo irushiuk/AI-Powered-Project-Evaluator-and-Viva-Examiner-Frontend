@@ -16,10 +16,10 @@ type SessionCountdownGateProps = {
 export function SessionCountdownGate({ sessionId, startsAt, serverTime }: SessionCountdownGateProps) {
   const [mounted, setMounted] = useState(false)
   const target = startsAt ? new Date(startsAt).getTime() : Number.NaN
-  const serverTimeMs = serverTime ? new Date(serverTime).getTime() : Date.now()
 
   // Calculate clock skew (client time vs server time)
   const [clockSkew] = useState(() => {
+    const serverTimeMs = serverTime ? new Date(serverTime).getTime() : Date.now()
     return Date.now() - serverTimeMs
   })
 

@@ -581,6 +581,78 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     }
   }, [currentQuestion, examinerQuestion, hasFinished])
 
+  // Deliberately does not touch speechSynthesis: this now runs the moment the
+  // AI finishes asking, and cancelling there would cut off the question.
+  function startRecognition() {
+    if (recognitionRef.current) return
+
+    const speechWindow = window as SpeechRecognitionWindow
+    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition
+
+    if (!Recognition) {
+      setSpeechSupported(false)
+      return
+    }
+
+    setInterimTranscript('')
+
+    const recognition = new Recognition()
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
+
+    recognition.onresult = (event) => {
+      let finalTranscript = ''
+      let interim = ''
+
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i]
+        const transcript = result[0]?.transcript ?? ''
+
+        if (result.isFinal) {
+          finalTranscript += transcript
+        } else {
+          interim += transcript
+        }
+      }
+
+      if (finalTranscript) {
+        setAnswerText((previous) => appendTranscript(previous, finalTranscript))
+      }
+      setInterimTranscript(interim.trim())
+    }
+
+    recognition.onerror = (event) => {
+      // 'no-speech'/'aborted' are routine — silence, or our own stop() — and
+      // should not stop us listening. A permission or hardware refusal is
+      // permanent for this page, so latch it and tell the student to type.
+      if (FATAL_SPEECH_ERRORS.has(event.error ?? '')) {
+        micBlockedRef.current = true
+        setSpeechSupported(false)
+      }
+      if (recognitionRef.current !== recognition) return
+      recognitionRef.current = null
+      setIsRecording(false)
+      setInterimTranscript('')
+    }
+
+    recognition.onend = () => {
+      // A superseded recogniser can still fire onend after a newer one has
+      // taken over; letting it run would null out the live one's ref.
+      if (recognitionRef.current !== recognition) return
+      // Chrome ends 'continuous' recognition on its own after a stretch of
+      // silence. Releasing the ref lets the auto-start effect resume listening
+      // instead of leaving a dead recogniser parked here.
+      recognitionRef.current = null
+      setIsRecording(false)
+      setInterimTranscript('')
+    }
+
+    recognitionRef.current = recognition
+    recognition.start()
+    setIsRecording(true)
+  }
+
   // Listen as soon as there is a question to answer and the mic is live —
   // the student should be able to just speak. This also resumes listening
   // after Chrome ends recognition on its own during a pause.
@@ -696,78 +768,6 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   const handleRetry = () => {
     startRequestRef.current = false
     loadFirstQuestion()
-  }
-
-  // Deliberately does not touch speechSynthesis: this now runs the moment the
-  // AI finishes asking, and cancelling there would cut off the question.
-  const startRecognition = () => {
-    if (recognitionRef.current) return
-
-    const speechWindow = window as SpeechRecognitionWindow
-    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition
-
-    if (!Recognition) {
-      setSpeechSupported(false)
-      return
-    }
-
-    setInterimTranscript('')
-
-    const recognition = new Recognition()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.lang = 'en-US'
-
-    recognition.onresult = (event) => {
-      let finalTranscript = ''
-      let interim = ''
-
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const result = event.results[i]
-        const transcript = result[0]?.transcript ?? ''
-
-        if (result.isFinal) {
-          finalTranscript += transcript
-        } else {
-          interim += transcript
-        }
-      }
-
-      if (finalTranscript) {
-        setAnswerText((previous) => appendTranscript(previous, finalTranscript))
-      }
-      setInterimTranscript(interim.trim())
-    }
-
-    recognition.onerror = (event) => {
-      // 'no-speech'/'aborted' are routine — silence, or our own stop() — and
-      // should not stop us listening. A permission or hardware refusal is
-      // permanent for this page, so latch it and tell the student to type.
-      if (FATAL_SPEECH_ERRORS.has(event.error ?? '')) {
-        micBlockedRef.current = true
-        setSpeechSupported(false)
-      }
-      if (recognitionRef.current !== recognition) return
-      recognitionRef.current = null
-      setIsRecording(false)
-      setInterimTranscript('')
-    }
-
-    recognition.onend = () => {
-      // A superseded recogniser can still fire onend after a newer one has
-      // taken over; letting it run would null out the live one's ref.
-      if (recognitionRef.current !== recognition) return
-      // Chrome ends 'continuous' recognition on its own after a stretch of
-      // silence. Releasing the ref lets the auto-start effect resume listening
-      // instead of leaving a dead recogniser parked here.
-      recognitionRef.current = null
-      setIsRecording(false)
-      setInterimTranscript('')
-    }
-
-    recognitionRef.current = recognition
-    recognition.start()
-    setIsRecording(true)
   }
 
   // Called by the Agora mic button. Muting stops listening; unmuting just
