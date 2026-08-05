@@ -66,6 +66,8 @@ export const VIVA_API = {
   currentQuestion: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/current/`,
   sessionReport: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/report/`,
   detailedReport: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/detailed-report/`,
+  patchAnswerScore: (sessionId: string, answerId: string) => `${API_BASE}/viva/sessions/${sessionId}/answers/${answerId}/score/`,
+  approveScores: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/approve-scores/`,
 }
 
 export const CODE_ANALYSIS_API = {

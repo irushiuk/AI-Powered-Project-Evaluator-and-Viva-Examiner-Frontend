@@ -46,8 +46,14 @@ export function SessionCompletedView({ results }: SessionCompletedViewProps) {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-primary">{results.score}</div>
-              <p className="mt-1 text-xs text-muted-foreground">out of 100</p>
+              {results.scores_status === 'approved' ? (
+                <>
+                  <div className="text-4xl font-bold text-primary">{results.score}</div>
+                  <p className="mt-1 text-xs text-muted-foreground">out of 100</p>
+                </>
+              ) : (
+                <div className="text-lg font-semibold text-amber-600 mt-2">Waiting for Examiner Approval</div>
+              )}
             </CardContent>
           </Card>
 
@@ -56,8 +62,14 @@ export function SessionCompletedView({ results }: SessionCompletedViewProps) {
               <CardTitle className="text-sm font-medium text-muted-foreground">Grade</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-accent">{results.grade}</div>
-              <p className="mt-1 text-xs text-muted-foreground">Overall assessment</p>
+              {results.scores_status === 'approved' ? (
+                <>
+                  <div className="text-4xl font-bold text-accent">{results.grade}</div>
+                  <p className="mt-1 text-xs text-muted-foreground">Overall assessment</p>
+                </>
+              ) : (
+                <div className="text-lg font-semibold text-amber-600 mt-2">Pending</div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -185,11 +197,6 @@ export function SessionCompletedView({ results }: SessionCompletedViewProps) {
                         <Badge variant="secondary">{item.difficulty}</Badge>
                       </div>
                     </div>
-                    {item.ai_answer_score !== null && (
-                      <Badge className="bg-primary flex-shrink-0 text-sm py-1 px-3">
-                        {item.ai_answer_score}/10
-                      </Badge>
-                    )}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -230,12 +237,24 @@ export function SessionCompletedView({ results }: SessionCompletedViewProps) {
           <CardContent className="space-y-6">
             <div className="grid gap-4 md:grid-cols-3">
               <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-center">
-                <div className="mb-1 text-3xl font-bold text-primary">{results.score}</div>
-                <p className="text-xs text-muted-foreground">Final Score</p>
+                {results.scores_status === 'approved' ? (
+                  <>
+                    <div className="mb-1 text-3xl font-bold text-primary">{results.score}</div>
+                    <p className="text-xs text-muted-foreground">Final Score</p>
+                  </>
+                ) : (
+                  <div className="mb-1 text-sm font-bold text-amber-600 mt-3">Waiting for Approval</div>
+                )}
               </div>
               <div className="rounded-lg border border-accent/20 bg-accent/5 p-4 text-center">
-                <div className="mb-1 text-3xl font-bold text-accent">{results.grade}</div>
-                <p className="text-xs text-muted-foreground">Grade</p>
+                {results.scores_status === 'approved' ? (
+                  <>
+                    <div className="mb-1 text-3xl font-bold text-accent">{results.grade}</div>
+                    <p className="text-xs text-muted-foreground">Grade</p>
+                  </>
+                ) : (
+                  <div className="mb-1 text-sm font-bold text-amber-600 mt-3">Pending</div>
+                )}
               </div>
               <div className="rounded-lg border border-secondary/20 bg-secondary/5 p-4 text-center">
                 <Award className="mx-auto mb-1 h-8 w-8 text-secondary" />

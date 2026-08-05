@@ -2,11 +2,22 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { ArrowLeft, Clock, MapPin, CheckCircle, XCircle, HelpCircle, BrainCircuit, Activity, BarChart3, AlertTriangle, Users } from "lucide-react"
+import { ArrowLeft, Clock, MapPin, CheckCircle, XCircle, HelpCircle, BrainCircuit, Activity, BarChart3, AlertTriangle, Users, Edit2, Check, X } from "lucide-react"
 import { vivaSessionService } from "@/services/vivaSessionService"
 import { formatColomboDateTime, formatColomboTime } from "@/utils/datetime"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 export default function SessionDetailedReportPage() {
   const params = useParams()
@@ -16,6 +27,10 @@ export default function SessionDetailedReportPage() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [expandedAnswers, setExpandedAnswers] = useState<Record<string, boolean>>({})
+  const [editingScoreId, setEditingScoreId] = useState<string | null>(null)
+  const [editScoreValue, setEditScoreValue] = useState<string>("")
+  const [approving, setApproving] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     if (!sessionId) return
@@ -54,6 +69,60 @@ export default function SessionDetailedReportPage() {
     setExpandedAnswers((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
+  const handleApproveScores = async () => {
+    setApproving(true);
+    try {
+      await vivaSessionService.approveSessionScores(sessionId);
+      toast.success("Scores approved successfully!");
+      setData((prev: any) => ({
+        ...prev,
+        report: prev.report ? { ...prev.report, scores_status: 'approved' } : { scores_status: 'approved' }
+      }));
+      // Optional: Since approval triggers a background report generation, we can reload the page data
+      // after a few seconds to get the final grades.
+      setTimeout(() => {
+        window.location.reload();
+      }, 3000);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to approve scores");
+    } finally {
+      setApproving(false);
+    }
+  }
+
+  const handleSaveScore = async (answerId: string) => {
+    const scoreNum = parseFloat(editScoreValue);
+    if (isNaN(scoreNum) || scoreNum < 0 || scoreNum > 10) {
+      toast.error("Please enter a valid score between 0 and 10");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await vivaSessionService.patchAnswerScore(sessionId, answerId, scoreNum, "");
+      toast.success("Score updated");
+      setData((prev: any) => ({
+        ...prev,
+        timeline: prev.timeline.map((item: any) => {
+          if (item.answer?.answer_id === answerId) {
+             return { 
+               ...item, 
+               answer: {
+                 ...item.answer,
+                 examiner_override_score: scoreNum
+               }
+             };
+          }
+          return item;
+        })
+      }));
+      setEditingScoreId(null);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update score");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
     <div className="max-w-full mx-auto py-8">
       {/* Header */}
@@ -69,9 +138,15 @@ export default function SessionDetailedReportPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
               AI Analysis & Report
-              <Badge variant={session.status === 'completed' ? 'default' : 'secondary'}>
-                {session.status}
-              </Badge>
+              {report?.scores_status === 'approved' ? (
+                <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                  <CheckCircle className="w-3.5 h-3.5 mr-1" /> Scores Approved
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">
+                  Scores Draft
+                </Badge>
+              )}
             </h1>
             <p className="text-gray-500 mt-1">{session.project_name}</p>
             
@@ -91,13 +166,42 @@ export default function SessionDetailedReportPage() {
             </div>
           </div>
 
-          {report && (
-            <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 text-center min-w-[120px]">
-              <div className="text-sm font-medium text-blue-600 uppercase tracking-wide">Final Grade</div>
-              <div className="text-3xl font-black text-blue-700 mt-1">{report.grade || "N/A"}</div>
-              <div className="text-xs text-blue-500 mt-1">Score: {report.total_final_score}%</div>
-            </div>
-          )}
+          <div className="flex items-center gap-4">
+            {session.status === 'completed' && report?.scores_status !== 'approved' && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button
+                    disabled={approving}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    {approving ? "Approving..." : "Approve Scores"}
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Approve Scores?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to approve these scores? This action cannot be undone and will lock the scores for this session permanently.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleApproveScores} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                      Confirm Approval
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            {report && report.grade && (
+              <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 text-center min-w-[120px]">
+                <div className="text-sm font-medium text-blue-600 uppercase tracking-wide">Final Grade</div>
+                <div className="text-3xl font-black text-blue-700 mt-1">{report.grade}</div>
+                <div className="text-xs text-blue-500 mt-1">Score: {report.total_final_score}%</div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -157,9 +261,57 @@ export default function SessionDetailedReportPage() {
                         <div className="flex justify-between items-start gap-4 mb-2">
                           <h3 className="font-medium text-gray-900 text-base leading-snug">{item.question_text}</h3>
                           {ans && ans.llm_score !== null && ans.llm_score !== undefined && (
-                            <div className="shrink-0 bg-white border border-indigo-100 text-indigo-700 font-bold px-3 py-1 rounded-lg shadow-sm text-sm flex items-center gap-1.5">
-                              <span className="text-xs font-normal text-indigo-400 uppercase">Score:</span>
-                              {Number(ans.llm_score).toFixed(1)}/10
+                            <div className="shrink-0 flex flex-col items-center gap-2">
+                              <div className="bg-white border border-indigo-100 text-indigo-700 font-bold px-3 py-1 rounded-lg shadow-sm text-sm flex items-center justify-center gap-1.5">
+                                <span className="text-xs font-normal text-indigo-400 uppercase">Score:</span>
+                                {Number(ans.examiner_override_score !== null ? ans.examiner_override_score : ans.llm_score).toFixed(1)}/10
+                                {ans.examiner_override_score !== null && (
+                                  <span className="ml-1 text-[10px] bg-indigo-100 text-indigo-700 px-1 rounded uppercase">Edited</span>
+                                )}
+                              </div>
+                              
+                              {report?.scores_status !== 'approved' && (
+                                editingScoreId === ans.answer_id ? (
+                                  <div className="flex flex-col items-center gap-2 bg-gray-50 border border-gray-200 p-2 rounded-lg shadow-sm">
+                                    <div className="flex items-center justify-center gap-2">
+                                      <span className="text-[11px] font-bold text-gray-500 uppercase">New:</span>
+                                      <input 
+                                        type="number" 
+                                        min="0" max="10" step="0.1"
+                                        value={editScoreValue}
+                                        onChange={(e) => setEditScoreValue(e.target.value)}
+                                        className="w-24 text-sm px-2 py-1.5 border border-gray-300 rounded outline-none text-center font-bold focus:border-indigo-500"
+                                      />
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <button 
+                                        onClick={() => setEditingScoreId(null)} 
+                                        disabled={isSaving}
+                                        className="text-xs font-bold px-3 py-1.5 bg-white border border-gray-300 text-gray-600 rounded hover:bg-gray-100 transition disabled:opacity-50"
+                                      >
+                                        Discard
+                                      </button>
+                                      <button 
+                                        onClick={() => handleSaveScore(ans.answer_id)} 
+                                        disabled={isSaving}
+                                        className="text-xs font-bold px-3 py-1.5 bg-emerald-600 text-white rounded hover:bg-emerald-700 transition shadow-sm disabled:opacity-50"
+                                      >
+                                        {isSaving ? "Saving..." : "Save"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <button 
+                                    onClick={() => {
+                                      setEditingScoreId(ans.answer_id);
+                                      setEditScoreValue(String(ans.examiner_override_score !== null ? ans.examiner_override_score : ans.llm_score));
+                                    }}
+                                    className="text-[11px] font-bold bg-blue-600 text-white hover:bg-blue-700 px-3 py-1 rounded shadow-sm transition uppercase tracking-wide"
+                                  >
+                                    Edit Score
+                                  </button>
+                                )
+                              )}
                             </div>
                           )}
                         </div>
