@@ -50,7 +50,23 @@ export async function submitProjectWorkAction(
 
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}))
-      return { ok: false, error: errData.message || "Failed to submit" }
+      console.error("[submitProjectWorkAction] Error response:", res.status, errData)
+      
+      let errorMsg = errData.error || errData.detail || errData.message
+      if (!errorMsg && typeof errData === 'object') {
+        // Handle Django REST framework field errors e.g. {"report_file": ["Only PDF..."]}
+        const firstKey = Object.keys(errData)[0]
+        if (firstKey && Array.isArray(errData[firstKey])) {
+          errorMsg = errData[firstKey][0]
+        } else if (firstKey && typeof errData[firstKey] === 'string') {
+          errorMsg = errData[firstKey]
+        }
+      }
+      
+      return { 
+        ok: false, 
+        error: errorMsg || `Failed to submit (${res.status})` 
+      }
     }
 
     revalidatePath(`/dashboard/student/projects/${projectId}`)
@@ -58,6 +74,7 @@ export async function submitProjectWorkAction(
 
     return { ok: true }
   } catch (error) {
+    console.error("[submitProjectWorkAction] Exception:", error)
     return { ok: false, error: error instanceof Error ? error.message : "Failed to submit" }
   }
 }
