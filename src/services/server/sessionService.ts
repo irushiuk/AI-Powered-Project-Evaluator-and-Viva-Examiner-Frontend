@@ -184,7 +184,16 @@ export const serverSessionService = {
     if (!submission) return null
 
     const reportData = await reportRes.json()
-    const report: VivaSessionReport = reportData.data ?? reportData
+    let rawReport = reportData.data ?? reportData
+    // Backward compatibility & Safe extraction: The backend now returns a dictionary mapping speaker_id -> report.
+    // To prevent the UI from crashing, we will just pick the first report found (e.g., 'group' or the first student).
+    if (rawReport && typeof rawReport === 'object' && !('overall_score' in rawReport)) {
+        const firstKey = Object.keys(rawReport)[0]
+        if (firstKey) {
+            rawReport = rawReport[firstKey]
+        }
+    }
+    const report: VivaSessionReport = rawReport
 
     let sonarSummary: SonarSummary | null = null
     const codeSubmissionId = latestCodeSubmissionId || submission.latest_code_submission_id
