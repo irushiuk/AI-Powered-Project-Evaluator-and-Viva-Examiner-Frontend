@@ -228,6 +228,13 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   // the current AI question stays parked until this is answered.
   const [examinerQuestion, setExaminerQuestion] = useState<LiveQuestion | null>(null)
   const seenExaminerQuestionsRef = useRef<Set<string>>(new Set())
+
+  // Examiner Takeover States
+  const [takeoverStatus, setTakeoverStatus] = useState<any>(null)
+  const [examinerDraftText, setExaminerDraftText] = useState('')
+  const [activePreemptiveId, setActivePreemptiveId] = useState<string | null>(null)
+  const examinerRecognitionRef = useRef<BrowserSpeechRecognition | null>(null)
+
   // Explicit, button-driven session lifecycle (no clock-based transitions):
   //   'checking'         → fetching the current phase
   //   'scheduled'        → lobby; student clicks Start Demo / Start Viva
@@ -319,25 +326,28 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     //   • otherwise adopt the server phase (scheduled lobby / demo / viva)
     // A status hiccup falls back to a scheduled lobby so nothing is blocked.
     ;(async () => {
-      if (getCachedQuestion(sessionId)) {
-        setPhase('viva_in_progress')
-        loadFirstQuestion()
-        return
-      }
       try {
         const status = await vivaSessionService.getSessionStatus(sessionId)
         if (!mountedRef.current) return
         setDemoEnabled(status.demo_enabled)
         setPhase(status.phase)
-        if (status.phase === 'viva_in_progress' || status.phase === 'completed') {
+        if (status.phase === 'completed') {
+          setHasFinished(true)
+          setIsLoading(false)
+        } else if (status.phase === 'viva_in_progress') {
           loadFirstQuestion()
         } else {
           setIsLoading(false)
         }
       } catch {
         if (!mountedRef.current) return
-        setPhase('scheduled')
-        setIsLoading(false)
+        if (getCachedQuestion(sessionId)) {
+          setPhase('viva_in_progress')
+          loadFirstQuestion()
+        } else {
+          setPhase('scheduled')
+          setIsLoading(false)
+        }
       }
     })()
 
@@ -363,25 +373,48 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     return () => clearInterval(id)
   }, [sessionId, hasFinished])
 
-  // While in the lobby or demo, poll the phase so a group member's screen
-  // follows when a teammate starts the demo, or ends it and the viva begins.
+  // Poll takeover status for both student and examiner
   useEffect(() => {
-    if (
-      phase !== 'scheduled' &&
-      phase !== 'ongoing' &&
-      phase !== 'live' &&
-      phase !== 'demo_in_progress'
-    )
-      return
+    if (hasFinished || phase !== 'viva_in_progress') return
+    const id = window.setInterval(async () => {
+      try {
+        const st = await liveQuestionService.status(sessionId)
+        if (!mountedRef.current) return
+        setTakeoverStatus(st)
+      } catch {}
+    }, 4000)
+    // Initial fetch
+    liveQuestionService.status(sessionId).then(st => {
+      if (mountedRef.current) setTakeoverStatus(st)
+    }).catch(() => {})
+    return () => window.clearInterval(id)
+  }, [sessionId, hasFinished, phase])
+
+  // Poll the phase throughout the whole session so we can detect
+  // completion reliably regardless of examiner takeover state.
+  useEffect(() => {
+    if (phase === 'completed' || hasFinished) return
     const id = window.setInterval(async () => {
       try {
         const status = await vivaSessionService.getSessionStatus(sessionId)
         if (!mountedRef.current) return
-        if (status.phase === 'viva_in_progress' || status.phase === 'completed') {
+        
+        if (status.phase === 'completed') {
           window.clearInterval(id)
-          setPhase('viva_in_progress')
-          setIsLoading(true)
-          loadFirstQuestion()
+          setPhase('completed')
+          setHasFinished(true)
+          if (!isExaminerView) {
+            toast.success('Viva session completed successfully.')
+            window.setTimeout(() => router.push('/dashboard/student/sessions'), 3000)
+          } else {
+            router.push(`/dashboard/teacher/sessions/${sessionId}/report`)
+          }
+        } else if (status.phase === 'viva_in_progress') {
+          if (phase !== 'viva_in_progress') {
+            setPhase('viva_in_progress')
+            setIsLoading(true)
+            loadFirstQuestion()
+          }
         } else if (status.phase !== phase) {
           setPhase(status.phase)
         }
@@ -390,7 +423,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       }
     }, 5000)
     return () => window.clearInterval(id)
-  }, [phase, sessionId, loadFirstQuestion])
+  }, [phase, sessionId, loadFirstQuestion, hasFinished, isExaminerView, router])
 
   // Trigger warmup when demo starts locally or when synced
   useEffect(() => {
@@ -834,6 +867,83 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     }
   }
 
+  // Examiner Controls
+  const handlePauseAI = async () => {
+    try {
+      await liveQuestionService.takeover(sessionId)
+      setTakeoverStatus((prev: any) => prev ? { ...prev, paused: true } : null)
+      toast.success('AI Questioning Paused')
+    } catch (e) {
+      toast.error('Failed to pause AI')
+    }
+  }
+
+  const handleResumeAI = async () => {
+    try {
+      await liveQuestionService.resume(sessionId)
+      setTakeoverStatus((prev: any) => prev ? { ...prev, paused: false } : null)
+      toast.success('AI Questioning Resumed')
+    } catch (e) {
+      toast.error('Failed to resume AI')
+    }
+  }
+
+  const handleEndSession = async () => {
+    try {
+      await liveQuestionService.endSession(sessionId)
+      toast.success('Session Ended by Examiner')
+      router.push(`/dashboard/teacher/sessions/${sessionId}/report`)
+    } catch (e) {
+      toast.error('Failed to end session')
+    }
+  }
+
+  const startExaminerRecognition = () => {
+    const speechWindow = window as SpeechRecognitionWindow
+    const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition
+    if (!Recognition) return
+
+    const recognition = new Recognition()
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
+    recognition.onresult = (event) => {
+      let finalTranscript = ''
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript
+      }
+      if (finalTranscript) {
+        setExaminerDraftText(prev => appendTranscript(prev, finalTranscript))
+      }
+    }
+    examinerRecognitionRef.current = recognition
+    recognition.start()
+  }
+
+  const handleStartExaminerQuestion = async () => {
+    try {
+      const { question_id } = await liveQuestionService.createPreemptive(sessionId)
+      setActivePreemptiveId(question_id)
+      setExaminerDraftText('')
+      startExaminerRecognition()
+    } catch (e) {
+      toast.error('Failed to start voice question')
+    }
+  }
+
+  const handleSendExaminerQuestion = async () => {
+    if (!activePreemptiveId) return
+    examinerRecognitionRef.current?.stop()
+    try {
+      await liveQuestionService.updatePreemptive(sessionId, activePreemptiveId, examinerDraftText)
+      setActivePreemptiveId(null)
+      setExaminerDraftText('')
+      toast.success('Question text saved to transcript')
+    } catch (e) {
+      toast.error('Failed to save question text')
+    }
+  }
+
   const submitAnswer = async (rawAnswer: string) => {
     if (!currentQuestion && !examinerQuestion) return
 
@@ -1218,9 +1328,11 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
               <VolumeX className="h-5 w-5 text-slate-500 shrink-0" />
             )}
             <span className="text-xs text-slate-400">
-              {isSpeaking && 'Examiner is speaking...'}
+              {takeoverStatus?.paused && !examinerQuestion && 'AI is paused. Waiting for Examiner...'}
+              {!takeoverStatus?.paused && isSpeaking && 'AI Examiner is speaking...'}
+              {takeoverStatus?.paused && examinerQuestion && 'Examiner is speaking...'}
               {isRecording && <span className="text-red-400 font-medium">Transcribing: {formatTime(recordingTime)}</span>}
-              {!isSpeaking && !isRecording && (
+              {!isSpeaking && !isRecording && !takeoverStatus?.paused && (
                 <span className="text-slate-500">
                   {micMuted ? 'Unmute your mic to answer' : 'Starting to listen...'}
                 </span>
@@ -1228,63 +1340,128 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
             </span>
           </div>
           <p className="text-base font-medium text-slate-100 leading-relaxed">
-            {examinerQuestion?.question_text ?? currentQuestion?.question_text}
+            {examinerQuestion?.question_text || currentQuestion?.question_text || ''}
           </p>
-          {examinerQuestion && currentQuestion && (
+          {takeoverStatus?.paused && examinerQuestion && (
             <p className="mt-2 text-[11px] text-amber-400/70">
-              The AI question will resume after you answer the examiner.
+              The examiner has taken over the session to ask you a question directly.
             </p>
           )}
         </div>
 
-        {/* Answer Textarea */}
-        <div className="space-y-2">
-          <Label htmlFor="answer-text" className="text-xs text-slate-400">Answer transcript</Label>
-          <Textarea
-            id="answer-text"
-            value={answerText}
-            onChange={(event) => setAnswerText(event.target.value)}
-            placeholder={
-              speechSupported
-                ? 'Your speech will appear here. You can also type or edit.'
-                : 'Speech recognition unavailable. Type your answer.'
-            }
-            className="min-h-24 resize-none bg-slate-900/50 border-slate-800 text-slate-100 placeholder:text-slate-600 text-sm"
-            disabled={isSubmitting}
-          />
-          {interimTranscript && (
-            <p className="rounded-md bg-slate-900 px-3 py-2 text-xs text-slate-400 border border-slate-800">
-              Listening: {interimTranscript}
-            </p>
-          )}
-        </div>
-
-        {/* Action Buttons — Skip and Submit only (Speak is now the Agora mic button) */}
-        <div className="flex items-center gap-2 pt-1">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleSkip}
-            disabled={isSubmitting || !!examinerQuestion}
-            className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
-          >
-            <SkipForward className="mr-1.5 h-3.5 w-3.5" />
-            Skip
-          </Button>
-
-          <Button
-            size="sm"
-            onClick={() => submitAnswer(appendTranscript(answerText, interimTranscript))}
-            disabled={isSubmitting || (!answerText.trim() && !interimTranscript.trim())}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            {isSubmitting ? (
-              <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Submitting...</>
-            ) : (
-              <><CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Submit Answer</>
+        {/* Answer Textarea — hidden from examiner */}
+        {!isExaminerView && (
+          <div className="space-y-2">
+            <Label htmlFor="answer-text" className="text-xs text-slate-400">Answer transcript</Label>
+            <Textarea
+              id="answer-text"
+              value={answerText}
+              onChange={(event) => setAnswerText(event.target.value)}
+              placeholder={
+                speechSupported
+                  ? 'Your speech will appear here. You can also type or edit.'
+                  : 'Speech recognition unavailable. Type your answer.'
+              }
+              className="min-h-24 resize-none bg-slate-900/50 border-slate-800 text-slate-100 placeholder:text-slate-600 text-sm"
+              disabled={isSubmitting}
+            />
+            {interimTranscript && (
+              <p className="rounded-md bg-slate-900 px-3 py-2 text-xs text-slate-400 border border-slate-800">
+                Listening: {interimTranscript}
+              </p>
             )}
-          </Button>
-        </div>
+          </div>
+        )}
+
+        {/* Action Buttons — Skip and Submit hidden from examiner */}
+        {!isExaminerView && (
+          <div className="flex items-center gap-2 pt-1">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSkip}
+              disabled={isSubmitting || !!examinerQuestion}
+              className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+            >
+              <SkipForward className="mr-1.5 h-3.5 w-3.5" />
+              Skip
+            </Button>
+
+            <Button
+              size="sm"
+              onClick={() => submitAnswer(appendTranscript(answerText, interimTranscript))}
+              disabled={isSubmitting || (!answerText.trim() && !interimTranscript.trim())}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {isSubmitting ? (
+                <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Submitting...</>
+              ) : (
+                <><CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Submit Answer</>
+              )}
+            </Button>
+          </div>
+        )}
+
+        {/* Examiner Takeover Panel */}
+        {isExaminerView && (
+          <div className="mt-6 pt-6 border-t border-slate-800 space-y-4">
+            <div className="p-4 border border-slate-700 bg-slate-800/50 rounded-xl">
+              <h4 className="text-sm font-semibold mb-3 text-slate-200">Session Control</h4>
+              <div className="flex gap-2 mb-4">
+                {takeoverStatus?.paused ? (
+                  <Button onClick={handleResumeAI} className="flex-1 bg-green-600 hover:bg-green-700 text-white border-0 shadow-lg">
+                    Resume AI
+                  </Button>
+                ) : (
+                  <Button onClick={handlePauseAI} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white border-0 shadow-lg">
+                    Pause AI
+                  </Button>
+                )}
+                <Button onClick={handleEndSession} variant="destructive" className="shadow-lg">
+                  End Session
+                </Button>
+              </div>
+              {takeoverStatus && (
+                <div className="text-xs text-slate-400 space-y-1.5 bg-slate-900/50 p-2.5 rounded-lg border border-slate-800/80">
+                  <div className="flex justify-between">
+                    <span>AI Questions:</span>
+                    <span className="font-medium text-slate-300">{takeoverStatus.ai_questions_asked} / {takeoverStatus.max_ai_questions}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Examiner Questions:</span>
+                    <span className="font-medium text-slate-300">{takeoverStatus.examiner_questions_asked}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {takeoverStatus?.paused && (
+              <div className="p-4 border border-blue-500/30 bg-blue-900/10 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.05)]">
+                <h4 className="text-sm font-semibold mb-3 text-blue-400">Ask Question (Voice)</h4>
+                {!activePreemptiveId ? (
+                  <Button onClick={handleStartExaminerQuestion} className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg h-11">
+                    <Mic className="w-4 h-4 mr-2" /> Start Speaking
+                  </Button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-red-400 text-xs font-semibold animate-pulse bg-red-950/30 p-2 rounded border border-red-900/50">
+                      <Mic className="w-4 h-4" /> Recording... (Student can hear you)
+                    </div>
+                    <Textarea 
+                      value={examinerDraftText}
+                      onChange={e => setExaminerDraftText(e.target.value)}
+                      className="text-sm min-h-24 bg-slate-900/80 border-slate-700"
+                      placeholder="Transcribing your question..."
+                    />
+                    <Button onClick={handleSendExaminerQuestion} className="w-full bg-green-600 hover:bg-green-700 text-white shadow-lg h-10">
+                      <CheckCircle2 className="w-4 h-4 mr-2" /> Finish & Save Transcript
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
 
       </div>
