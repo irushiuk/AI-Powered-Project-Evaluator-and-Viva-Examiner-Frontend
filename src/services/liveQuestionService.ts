@@ -15,6 +15,14 @@ export interface LiveQuestion {
   answer: LiveQuestionAnswer | null
 }
 
+export interface SessionTakeoverStatus {
+  paused: boolean
+  ai_questions_asked: number
+  examiner_questions_asked: number
+  max_ai_questions: number
+  session_status: string
+}
+
 async function ok<T>(res: Response, fallback: string): Promise<T> {
   const body = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(body.message || fallback)
@@ -59,5 +67,52 @@ export const liveQuestionService = {
       body: JSON.stringify({ answer_text: answerText }),
     })
     await ok(res, 'Failed to submit the answer')
+  },
+
+  // -------------------------------------------------------------------------
+  // Examiner Takeover Flow
+  // -------------------------------------------------------------------------
+
+  async takeover(sessionId: string): Promise<{ paused: boolean; ai_questions_asked: number }> {
+    const res = await apiFetch(LIVE_QUESTIONS_API.takeover(sessionId), {
+      method: 'POST',
+    })
+    return ok(res, 'Failed to take over session')
+  },
+
+  async resume(sessionId: string): Promise<{ paused: boolean }> {
+    const res = await apiFetch(LIVE_QUESTIONS_API.resume(sessionId), {
+      method: 'POST',
+    })
+    return ok(res, 'Failed to resume session')
+  },
+
+  async endSession(sessionId: string): Promise<{ ended: boolean }> {
+    const res = await apiFetch(LIVE_QUESTIONS_API.endSession(sessionId), {
+      method: 'POST',
+    })
+    return ok(res, 'Failed to end session')
+  },
+
+  async status(sessionId: string): Promise<SessionTakeoverStatus> {
+    const res = await apiFetch(LIVE_QUESTIONS_API.status(sessionId))
+    return ok<SessionTakeoverStatus>(res, 'Failed to get takeover status')
+  },
+
+  async createPreemptive(sessionId: string): Promise<{ question_id: string }> {
+    const res = await apiFetch(LIVE_QUESTIONS_API.preemptive(sessionId), {
+      method: 'POST',
+    })
+    const q = await ok<LiveQuestion>(res, 'Failed to create preemptive question')
+    return { question_id: q.question_id }
+  },
+
+  async updatePreemptive(sessionId: string, questionId: string, text: string): Promise<void> {
+    const res = await apiFetch(LIVE_QUESTIONS_API.updatePreemptive(sessionId, questionId), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question_text: text }),
+    })
+    await ok(res, 'Failed to update preemptive question text')
   },
 }

@@ -87,6 +87,12 @@ export const LIVE_QUESTIONS_API = {
   pending: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/live-questions/pending/`,
   answer: (sessionId: string, questionId: string) =>
     `${API_BASE}/sessions/${sessionId}/live-questions/${questionId}/answer/`,
+  takeover: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/live-questions/takeover/`,
+  resume: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/live-questions/resume/`,
+  endSession: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/live-questions/end-session/`,
+  status: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/live-questions/status/`,
+  preemptive: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/live-questions/preemptive/`,
+  updatePreemptive: (sessionId: string, questionId: string) => `${API_BASE}/sessions/${sessionId}/live-questions/${questionId}/`,
 }
 
 export const RUBRIC_EXTRACT_API = {
