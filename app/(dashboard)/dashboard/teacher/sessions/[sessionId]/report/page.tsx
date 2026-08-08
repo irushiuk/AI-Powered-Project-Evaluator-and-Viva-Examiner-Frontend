@@ -31,9 +31,10 @@ export default function SessionDetailedReportPage() {
   const [editScoreValue, setEditScoreValue] = useState<string>("")
   const [approving, setApproving] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [selectedSpeaker, setSelectedSpeaker] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!sessionId) return
+    if (!sessionId || sessionId === "undefined") return
     const load = async () => {
       try {
         const res = await vivaSessionService.getSessionDetailedReport(sessionId)
@@ -43,8 +44,12 @@ export default function SessionDetailedReportPage() {
           return
         }
         setData(res)
-      } catch (err) {
-        toast.error("An error occurred")
+        if (res.reports && Object.keys(res.reports).length > 0) {
+            setSelectedSpeaker(Object.keys(res.reports)[0])
+        }
+      } catch (err: any) {
+        console.error("API Error when loading detailed report:", err)
+        toast.error(`Error loading report: ${err?.message || "An error occurred"}`)
         router.back()
       } finally {
         setLoading(false)
@@ -63,7 +68,9 @@ export default function SessionDetailedReportPage() {
 
   if (!data) return null
 
-  const { session, report, timeline } = data
+  const { session, reports, timeline } = data
+  // Fallback to data.report if reports is empty
+  const report = (reports && selectedSpeaker) ? reports[selectedSpeaker] : data.report
 
   const toggleAnswer = (id: string) => {
     setExpandedAnswers((prev) => ({ ...prev, [id]: !prev[id] }))
@@ -74,10 +81,17 @@ export default function SessionDetailedReportPage() {
     try {
       await vivaSessionService.approveSessionScores(sessionId);
       toast.success("Scores approved successfully!");
-      setData((prev: any) => ({
-        ...prev,
-        report: prev.report ? { ...prev.report, scores_status: 'approved' } : { scores_status: 'approved' }
-      }));
+      setData((prev: any) => {
+        const updatedReports = prev.reports ? { ...prev.reports } : {};
+        for (const key in updatedReports) {
+            updatedReports[key] = { ...updatedReports[key], scores_status: 'approved' };
+        }
+        return {
+          ...prev,
+          reports: updatedReports,
+          report: prev.report ? { ...prev.report, scores_status: 'approved' } : { scores_status: 'approved' }
+        };
+      });
       // Optional: Since approval triggers a background report generation, we can reload the page data
       // after a few seconds to get the final grades.
       setTimeout(() => {
@@ -204,6 +218,26 @@ export default function SessionDetailedReportPage() {
           </div>
         </div>
       </div>
+      
+      {/* Student / Group Tabs */}
+      {reports && Object.keys(reports).length > 1 && (
+        <div className="flex gap-2 mb-6 bg-gray-50/50 p-2 rounded-xl border border-gray-100 overflow-x-auto">
+          {Object.entries(reports).map(([key, r]: [string, any]) => (
+            <button
+              key={key}
+              onClick={() => setSelectedSpeaker(key)}
+              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition whitespace-nowrap flex-1 flex items-center justify-center gap-2 ${
+                selectedSpeaker === key 
+                  ? 'bg-white shadow-sm text-blue-600 border border-gray-200/60' 
+                  : 'text-gray-500 hover:bg-gray-100/50 hover:text-gray-700'
+              }`}
+            >
+              <Users className={`h-4 w-4 ${selectedSpeaker === key ? 'text-blue-500' : 'text-gray-400'}`} />
+              {r.student_name || 'Group'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Summary Feedback */}
       {report && (
