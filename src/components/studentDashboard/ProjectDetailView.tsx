@@ -25,11 +25,13 @@ import { Badge } from '@/components/ui/badge'
 import { SubmissionForm } from './SubmissionForm'
 import Link from 'next/link'
 import type { EnrolledProject } from '@/types/project'
+import { CodeAnalysisCard } from './CodeAnalysisCard'
 
 type SubmissionDetails = {
   submitted_at: string
   github_repo_url: string | null
   report_file_url: string | null
+  code_submission_id: string | null
 }
 
 interface ProjectDetailViewProps {
@@ -242,6 +244,10 @@ export function ProjectDetailView({ initialProject = null, initialSubmissionData
             />
           </CardContent>
         </Card>
+      )}
+
+      {hasSubmitted && submissionData?.code_submission_id && (
+        <CodeAnalysisCard codeSubmissionId={submissionData.code_submission_id} />
       )}
 
       {/* Session Link */}
