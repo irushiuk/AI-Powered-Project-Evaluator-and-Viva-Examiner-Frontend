@@ -51,6 +51,7 @@ export type AutoSchedulePayload = {
   location_room: string
   demo_enabled: boolean
   max_total_questions?: number
+  viva_weight_percentage?: number
 }
 
 // ── Manual scheduling payload ─────────────────────────────────────────────────
@@ -67,6 +68,7 @@ export type ManualSchedulePayload = {
   sessions: ManualSessionEntry[]
   demo_enabled: boolean
   max_total_questions?: number
+  viva_weight_percentage?: number
 }
 
 // ── Update payload ────────────────────────────────────────────────────────────

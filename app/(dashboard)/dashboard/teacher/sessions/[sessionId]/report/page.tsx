@@ -212,7 +212,11 @@ export default function SessionDetailedReportPage() {
               <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 text-center min-w-[120px]">
                 <div className="text-sm font-medium text-blue-600 uppercase tracking-wide">Final Grade</div>
                 <div className="text-3xl font-black text-blue-700 mt-1">{report.grade}</div>
-                <div className="text-xs text-blue-500 mt-1">Score: {report.total_final_score}%</div>
+                {report.viva_weight_percentage !== undefined && report.viva_weight_percentage !== 100 ? (
+                  <div className="text-xs text-blue-500 mt-1">Score: {report.scaled_score} / {report.viva_weight_percentage}</div>
+                ) : (
+                  <div className="text-xs text-blue-500 mt-1">Score: {report.total_final_score}%</div>
+                )}
               </div>
             )}
           </div>
