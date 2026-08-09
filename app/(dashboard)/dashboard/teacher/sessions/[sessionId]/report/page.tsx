@@ -293,7 +293,7 @@ export default function SessionDetailedReportPage() {
                       {/* Question Header */}
                       <div className="p-5 border-b border-gray-100 bg-gray-50/50">
                         <div className="flex justify-between items-start gap-4 mb-2">
-                          <h3 className="font-medium text-gray-900 text-base leading-snug">{item.question_text}</h3>
+                          <h3 className="font-medium text-gray-900 text-base leading-snug">{item.question_text || <span className="italic text-gray-400">[Examiner asked question via voice]</span>}</h3>
                           {ans && ans.llm_score !== null && ans.llm_score !== undefined && (
                             <div className="shrink-0 flex flex-col items-center gap-2">
                               <div className="bg-white border border-indigo-100 text-indigo-700 font-bold px-3 py-1 rounded-lg shadow-sm text-sm flex items-center justify-center gap-1.5">
@@ -350,16 +350,28 @@ export default function SessionDetailedReportPage() {
                           )}
                         </div>
                         <div className="flex flex-wrap gap-2 mt-3">
-                          <Badge variant="outline" className="text-xs font-normal text-gray-500 bg-white">
-                            Topic: {item.criterion}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs font-normal text-gray-500 bg-white">
-                            Bloom's: <span className="capitalize ml-1">{item.blooms_level}</span>
-                          </Badge>
-                          {item.difficulty && (
-                            <Badge variant="outline" className="text-xs font-normal text-gray-500 bg-white">
-                              Diff: <span className="capitalize ml-1">{item.difficulty}</span>
+                          {item.question_source === 'examiner' ? (
+                            <Badge variant="outline" className="text-xs font-normal text-amber-600 bg-amber-50 border-amber-200">
+                              Examiner Question
                             </Badge>
+                          ) : (
+                            <>
+                              {item.criterion && (
+                                <Badge variant="outline" className="text-xs font-normal text-gray-500 bg-white">
+                                  Topic: {item.criterion}
+                                </Badge>
+                              )}
+                              {item.blooms_level && (
+                                <Badge variant="outline" className="text-xs font-normal text-gray-500 bg-white">
+                                  Bloom's: <span className="capitalize ml-1">{item.blooms_level}</span>
+                                </Badge>
+                              )}
+                              {item.difficulty && (
+                                <Badge variant="outline" className="text-xs font-normal text-gray-500 bg-white">
+                                  Diff: <span className="capitalize ml-1">{item.difficulty}</span>
+                                </Badge>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -482,7 +494,11 @@ export default function SessionDetailedReportPage() {
                       ) : (
                         <div className="p-5">
                           <p className="text-sm text-gray-400 italic flex items-center gap-2">
-                            <Clock className="w-4 h-4" /> Waiting for student to answer...
+                            {session?.status === 'completed' ? (
+                              <><XCircle className="w-4 h-4 text-gray-400" /> Unanswered — session ended</>
+                            ) : (
+                              <><Clock className="w-4 h-4" /> Waiting for student to answer...</>
+                            )}
                           </p>
                         </div>
                       )}

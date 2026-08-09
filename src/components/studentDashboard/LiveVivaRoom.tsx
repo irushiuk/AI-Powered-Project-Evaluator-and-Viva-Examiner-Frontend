@@ -898,6 +898,17 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   const handleEndSession = async () => {
     setActionLoading('end')
     try {
+      // Auto-save any in-progress voice question transcript before ending
+      if (activePreemptiveId) {
+        examinerRecognitionRef.current?.stop()
+        try {
+          await liveQuestionService.updatePreemptive(sessionId, activePreemptiveId, examinerDraftText || '[Examiner asked question via voice]')
+        } catch {
+          // Best-effort save; proceed with ending regardless
+        }
+        setActivePreemptiveId(null)
+        setExaminerDraftText('')
+      }
       await liveQuestionService.endSession(sessionId)
       toast.success('Session Ended by Examiner')
       router.push(`/dashboard/teacher/sessions/${sessionId}/report`)
