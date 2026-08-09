@@ -269,6 +269,7 @@ function AutoScheduleModal({
   const [room, setRoom] = useState("")
   const [demoEnabled, setDemoEnabled] = useState(false)
   const [maxTotalQuestions, setMaxTotalQuestions] = useState("10")
+  const [vivaWeightPercentage, setVivaWeightPercentage] = useState("100")
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -305,6 +306,7 @@ function AutoScheduleModal({
       location_room: room.trim(),
       demo_enabled: demoEnabled,
       max_total_questions: Number(maxTotalQuestions) || undefined,
+      viva_weight_percentage: Number(vivaWeightPercentage) || undefined,
     }
     try {
       await sessionService.scheduleAuto(projectId, payload)
@@ -450,6 +452,20 @@ function AutoScheduleModal({
                 className={`w-full ${inputBase}`}
               />
             </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1.5 block">
+                Viva Weight (%)
+              </label>
+              <input
+                type="number"
+                placeholder="e.g. 20"
+                min={1}
+                max={100}
+                value={vivaWeightPercentage}
+                onChange={(e) => setVivaWeightPercentage(e.target.value)}
+                className={`w-full ${inputBase}`}
+              />
+            </div>
           </div>
         </div>
 
@@ -483,6 +499,7 @@ function ManualScheduleModal({
   ])
   const [demoEnabled, setDemoEnabled] = useState(false)
   const [maxTotalQuestions, setMaxTotalQuestions] = useState("10")
+  const [vivaWeightPercentage, setVivaWeightPercentage] = useState("100")
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -525,6 +542,7 @@ function ManualScheduleModal({
         sessions, 
         demo_enabled: demoEnabled,
         max_total_questions: Number(maxTotalQuestions) || undefined,
+        viva_weight_percentage: Number(vivaWeightPercentage) || undefined,
       })
       toast.success("Manual sessions scheduled successfully")
       onScheduled()
@@ -652,6 +670,20 @@ function ManualScheduleModal({
                 min={1}
                 value={maxTotalQuestions}
                 onChange={(e) => setMaxTotalQuestions(e.target.value)}
+                className={`w-full ${inputBase}`}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-700 mb-1.5 block">
+                Viva Weight (%)
+              </label>
+              <input
+                type="number"
+                placeholder="e.g. 20"
+                min={1}
+                max={100}
+                value={vivaWeightPercentage}
+                onChange={(e) => setVivaWeightPercentage(e.target.value)}
                 className={`w-full ${inputBase}`}
               />
             </div>
