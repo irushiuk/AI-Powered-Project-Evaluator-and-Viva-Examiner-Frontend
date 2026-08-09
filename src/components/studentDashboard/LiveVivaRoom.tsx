@@ -233,6 +233,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   const [takeoverStatus, setTakeoverStatus] = useState<any>(null)
   const [examinerDraftText, setExaminerDraftText] = useState('')
   const [activePreemptiveId, setActivePreemptiveId] = useState<string | null>(null)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
   const examinerRecognitionRef = useRef<BrowserSpeechRecognition | null>(null)
 
   // Explicit, button-driven session lifecycle (no clock-based transitions):
@@ -869,32 +870,40 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
 
   // Examiner Controls
   const handlePauseAI = async () => {
+    setActionLoading('pause')
     try {
       await liveQuestionService.takeover(sessionId)
       setTakeoverStatus((prev: any) => prev ? { ...prev, paused: true } : null)
       toast.success('AI Questioning Paused')
     } catch (e) {
       toast.error('Failed to pause AI')
+    } finally {
+      setActionLoading(null)
     }
   }
 
   const handleResumeAI = async () => {
+    setActionLoading('resume')
     try {
       await liveQuestionService.resume(sessionId)
       setTakeoverStatus((prev: any) => prev ? { ...prev, paused: false } : null)
       toast.success('AI Questioning Resumed')
     } catch (e) {
       toast.error('Failed to resume AI')
+    } finally {
+      setActionLoading(null)
     }
   }
 
   const handleEndSession = async () => {
+    setActionLoading('end')
     try {
       await liveQuestionService.endSession(sessionId)
       toast.success('Session Ended by Examiner')
       router.push(`/dashboard/teacher/sessions/${sessionId}/report`)
     } catch (e) {
       toast.error('Failed to end session')
+      setActionLoading(null)
     }
   }
 
@@ -921,6 +930,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   }
 
   const handleStartExaminerQuestion = async () => {
+    setActionLoading('start_q')
     try {
       const { question_id } = await liveQuestionService.createPreemptive(sessionId)
       setActivePreemptiveId(question_id)
@@ -928,11 +938,14 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       startExaminerRecognition()
     } catch (e) {
       toast.error('Failed to start voice question')
+    } finally {
+      setActionLoading(null)
     }
   }
 
   const handleSendExaminerQuestion = async () => {
     if (!activePreemptiveId) return
+    setActionLoading('send_q')
     examinerRecognitionRef.current?.stop()
     try {
       await liveQuestionService.updatePreemptive(sessionId, activePreemptiveId, examinerDraftText)
@@ -941,6 +954,8 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       toast.success('Question text saved to transcript')
     } catch (e) {
       toast.error('Failed to save question text')
+    } finally {
+      setActionLoading(null)
     }
   }
 
@@ -1311,7 +1326,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
 
         {/* Question Card */}
         <div className={`rounded-xl border p-4 transition-colors duration-500 ${
-          examinerQuestion
+          (examinerQuestion || takeoverStatus?.paused)
             ? 'border-amber-500/60 bg-amber-500/5 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
             : isRecording
               ? 'border-red-500/50 bg-red-500/5 shadow-[0_0_15px_rgba(239,68,68,0.15)]'
@@ -1330,21 +1345,28 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
             <span className="text-xs text-slate-400">
               {takeoverStatus?.paused && !examinerQuestion && 'AI is paused. Waiting for Examiner...'}
               {!takeoverStatus?.paused && isSpeaking && 'AI Examiner is speaking...'}
-              {takeoverStatus?.paused && examinerQuestion && 'Examiner is speaking...'}
-              {isRecording && <span className="text-red-400 font-medium">Transcribing: {formatTime(recordingTime)}</span>}
-              {!isSpeaking && !isRecording && !takeoverStatus?.paused && (
+              {(takeoverStatus?.paused && examinerQuestion) && 'Examiner is speaking...'}
+              {!takeoverStatus?.paused && isRecording && <span className="text-red-400 font-medium">Transcribing: {formatTime(recordingTime)}</span>}
+              {!takeoverStatus?.paused && !isSpeaking && !isRecording && (
                 <span className="text-slate-500">
                   {micMuted ? 'Unmute your mic to answer' : 'Starting to listen...'}
                 </span>
               )}
             </span>
           </div>
-          <p className="text-base font-medium text-slate-100 leading-relaxed">
-            {examinerQuestion?.question_text || currentQuestion?.question_text || ''}
-          </p>
-          {takeoverStatus?.paused && examinerQuestion && (
-            <p className="mt-2 text-[11px] text-amber-400/70">
-              The examiner has taken over the session to ask you a question directly.
+          
+          {(examinerQuestion || takeoverStatus?.paused) ? (
+            <div className="py-2">
+              <p className="text-base font-medium text-amber-500 leading-relaxed">
+                The examiner has taken over the session to ask you a question directly.
+              </p>
+              <p className="mt-2 text-xs text-amber-400/70">
+                Please listen to the examiner and speak your answer.
+              </p>
+            </div>
+          ) : (
+            <p className="text-base font-medium text-slate-100 leading-relaxed">
+              {currentQuestion?.question_text || ''}
             </p>
           )}
         </div>
@@ -1380,7 +1402,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
               size="sm"
               variant="outline"
               onClick={handleSkip}
-              disabled={isSubmitting || !!examinerQuestion}
+              disabled={isSubmitting || !!examinerQuestion || takeoverStatus?.paused}
               className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
             >
               <SkipForward className="mr-1.5 h-3.5 w-3.5" />
@@ -1409,16 +1431,29 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
               <h4 className="text-sm font-semibold mb-3 text-slate-200">Session Control</h4>
               <div className="flex gap-2 mb-4">
                 {takeoverStatus?.paused ? (
-                  <Button onClick={handleResumeAI} className="flex-1 bg-green-600 hover:bg-green-700 text-white border-0 shadow-lg">
-                    Resume AI
+                  <Button 
+                    onClick={handleResumeAI} 
+                    disabled={actionLoading === 'resume'}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white border-0 shadow-lg"
+                  >
+                    {actionLoading === 'resume' ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Resuming...</> : 'Resume AI'}
                   </Button>
                 ) : (
-                  <Button onClick={handlePauseAI} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white border-0 shadow-lg">
-                    Pause AI
+                  <Button 
+                    onClick={handlePauseAI} 
+                    disabled={actionLoading === 'pause'}
+                    className="flex-1 bg-amber-600 hover:bg-amber-700 text-white border-0 shadow-lg"
+                  >
+                    {actionLoading === 'pause' ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Pausing...</> : 'Pause AI'}
                   </Button>
                 )}
-                <Button onClick={handleEndSession} variant="destructive" className="shadow-lg">
-                  End Session
+                <Button 
+                  onClick={handleEndSession} 
+                  disabled={actionLoading === 'end'}
+                  variant="destructive" 
+                  className="shadow-lg"
+                >
+                  {actionLoading === 'end' ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Ending...</> : 'End Session'}
                 </Button>
               </div>
               {takeoverStatus && (
@@ -1439,8 +1474,16 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
               <div className="p-4 border border-blue-500/30 bg-blue-900/10 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.05)]">
                 <h4 className="text-sm font-semibold mb-3 text-blue-400">Ask Question (Voice)</h4>
                 {!activePreemptiveId ? (
-                  <Button onClick={handleStartExaminerQuestion} className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg h-11">
-                    <Mic className="w-4 h-4 mr-2" /> Start Speaking
+                  <Button 
+                    onClick={handleStartExaminerQuestion} 
+                    disabled={actionLoading === 'start_q'}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg h-11"
+                  >
+                    {actionLoading === 'start_q' ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Starting...</>
+                    ) : (
+                      <><Mic className="w-4 h-4 mr-2" /> Start Speaking</>
+                    )}
                   </Button>
                 ) : (
                   <div className="space-y-3">
@@ -1450,11 +1493,19 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
                     <Textarea 
                       value={examinerDraftText}
                       onChange={e => setExaminerDraftText(e.target.value)}
-                      className="text-sm min-h-24 bg-slate-900/80 border-slate-700"
+                      className="text-sm min-h-24 bg-slate-900/80 border-slate-700 text-slate-100 placeholder:text-slate-500"
                       placeholder="Transcribing your question..."
                     />
-                    <Button onClick={handleSendExaminerQuestion} className="w-full bg-green-600 hover:bg-green-700 text-white shadow-lg h-10">
-                      <CheckCircle2 className="w-4 h-4 mr-2" /> Finish & Save Transcript
+                    <Button 
+                      onClick={handleSendExaminerQuestion} 
+                      disabled={actionLoading === 'send_q'}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white shadow-lg h-10"
+                    >
+                      {actionLoading === 'send_q' ? (
+                        <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
+                      ) : (
+                        <><CheckCircle2 className="w-4 h-4 mr-2" /> Finish & Save Transcript</>
+                      )}
                     </Button>
                   </div>
                 )}
