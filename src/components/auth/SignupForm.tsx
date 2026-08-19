@@ -27,11 +27,9 @@ export default function SignupForm() {
   const [error, setError] = useState<string | null>(null)
   const auth = useAuth()
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
+  const action = async (formData: FormData) => {
     setError(null)
 
-    const formData = new FormData(e.currentTarget)
     const password = String(formData.get("password") || "")
     const confirmPassword = String(formData.get("confirmPassword") || "")
 
@@ -87,7 +85,7 @@ export default function SignupForm() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form action={action} className="space-y-6">
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="fullName">Full Name</FieldLabel>

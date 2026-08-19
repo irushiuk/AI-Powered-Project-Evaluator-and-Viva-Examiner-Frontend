@@ -8,6 +8,8 @@ import {
   User,
   UserCircle,
   ArrowRight,
+  Building2,
+  Laptop,
 } from "lucide-react"
 
 import { Project } from "@/types/project"
@@ -64,6 +66,20 @@ export default function ProjectCard({
                 className="capitalize bg-blue-50 text-blue-700 border-blue-200"
               >
                 {project.status}
+              </Badge>
+
+              <Badge
+                variant="outline"
+                className={project.evaluation_mode === "physical"
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-1"
+                  : "bg-indigo-50 text-indigo-700 border-indigo-200 flex items-center gap-1"
+                }
+              >
+                {project.evaluation_mode === "physical" ? (
+                  <><Building2 className="h-3 w-3" /> Physical</>
+                ) : (
+                  <><Laptop className="h-3 w-3" /> Remote</>
+                )}
               </Badge>
 
               <Badge

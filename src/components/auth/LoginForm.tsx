@@ -15,12 +15,10 @@ export default function LoginForm() {
   const [error, setError] = useState<string | null>(null)
   const auth = useAuth()
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
+  const action = async (formData: FormData) => {
     setError(null)
     setIsSubmitting(true)
 
-    const formData = new FormData(e.currentTarget)
     const email = String(formData.get("email") || "")
     const password = String(formData.get("password") || "")
 
@@ -52,7 +50,7 @@ export default function LoginForm() {
           <CardDescription>Login to continue to VivaSense</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form action={action} className="space-y-6">
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="email">Email</FieldLabel>

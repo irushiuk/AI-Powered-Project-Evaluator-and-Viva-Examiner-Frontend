@@ -5,6 +5,8 @@ export type AvailableProject = {
   is_group_project: boolean
   submission_deadline: string | null
   lead_examiner_name: string | null
+  evaluation_mode: EvaluationMode
+  physical_location: string | null
 }
 
 export type SessionDetails = {
@@ -32,8 +34,11 @@ export type EnrolledProject = {
   submission_status: 'submitted' | 'not_submitted'
   session_details: SessionDetails | null
   group_info: GroupInfo | null
+  evaluation_mode: EvaluationMode
+  physical_location: string | null
 }
 export type ProjectStatus = 'draft' | 'active' | 'completed'
+export type EvaluationMode = 'remote' | 'physical'
 
 export type Project = {
   id: string
@@ -44,6 +49,8 @@ export type Project = {
   status: ProjectStatus
   academic_year: string
   created_at: string
+  evaluation_mode: EvaluationMode
+  physical_location: string | null
 }
 
 export type CreateProjectPayload = {
@@ -52,4 +59,7 @@ export type CreateProjectPayload = {
   is_group_project: boolean
   submission_deadline: string
   academic_year: string
+  evaluation_mode: EvaluationMode
+  physical_location?: string
+  physical_panel_pin?: string
 }

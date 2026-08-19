@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "../ui/button"
-import { Pencil, Plus, User, Users } from "lucide-react"
-import { CreateProjectPayload, Project } from "@/types/project"
+import { Building2, Laptop, LockKeyhole, Pencil, Plus, User, Users } from "lucide-react"
+import { CreateProjectPayload, EvaluationMode, Project } from "@/types/project"
 
 type Props = {
   isOpen: boolean
@@ -16,6 +16,8 @@ type Errors = {
   project_name?: string
   submission_deadline?: string
   academic_year?: string
+  physical_location?: string
+  physical_panel_pin?: string
 }
 
 export default function CreateProjectModal({ isOpen, onClose, onCreate, initialData }: Props) {
@@ -24,6 +26,9 @@ export default function CreateProjectModal({ isOpen, onClose, onCreate, initialD
   const [isGroupProject, setIsGroupProject] = useState(false)
   const [submissionDeadline, setSubmissionDeadline] = useState("")
   const [academicYear, setAcademicYear] = useState("")
+  const [evaluationMode, setEvaluationMode] = useState<EvaluationMode>("remote")
+  const [physicalLocation, setPhysicalLocation] = useState("")
+  const [physicalPanelPin, setPhysicalPanelPin] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errors, setErrors] = useState<Errors>({})
 
@@ -40,6 +45,9 @@ export default function CreateProjectModal({ isOpen, onClose, onCreate, initialD
           : ""
       )
       setAcademicYear(initialData?.academic_year ?? "")
+      setEvaluationMode(initialData?.evaluation_mode ?? "remote")
+      setPhysicalLocation(initialData?.physical_location ?? "")
+      setPhysicalPanelPin("")
       setErrors({})
     }
   }, [isOpen, initialData])
@@ -51,6 +59,14 @@ export default function CreateProjectModal({ isOpen, onClose, onCreate, initialD
     if (!projectName.trim()) newErrors.project_name = "Project name is required"
     if (!submissionDeadline) newErrors.submission_deadline = "Submission deadline is required"
     if (!academicYear.trim()) newErrors.academic_year = "Academic year is required"
+    if (evaluationMode === "physical") {
+      if (!physicalLocation.trim()) {
+        newErrors.physical_location = "Physical evaluation location is required"
+      }
+      if (!isEditMode && physicalPanelPin.length < 4) {
+        newErrors.physical_panel_pin = "Panel password must contain at least 4 characters"
+      }
+    }
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -71,6 +87,13 @@ export default function CreateProjectModal({ isOpen, onClose, onCreate, initialD
         // Convert to ISO 8601 with Z suffix as expected by backend
         submission_deadline: new Date(submissionDeadline).toISOString(),
         academic_year: academicYear.trim(),
+        evaluation_mode: evaluationMode,
+        ...(evaluationMode === "physical"
+          ? {
+              physical_location: physicalLocation.trim(),
+              ...(!isEditMode ? { physical_panel_pin: physicalPanelPin } : {}),
+            }
+          : {}),
       })
       handleClose()
     } finally {
@@ -188,6 +211,106 @@ export default function CreateProjectModal({ isOpen, onClose, onCreate, initialD
               </button>
             </div>
           </div>
+
+          {/* Evaluation mode is fixed for the whole project. */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">
+              Evaluation Method
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                disabled={isEditMode}
+                onClick={() => {
+                  setEvaluationMode("remote")
+                  setErrors((prev) => ({
+                    ...prev,
+                    physical_location: undefined,
+                    physical_panel_pin: undefined,
+                  }))
+                }}
+                className={`rounded-xl border p-3 text-left transition disabled:cursor-not-allowed ${
+                  evaluationMode === "remote"
+                    ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-indigo-300"
+                }`}
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold">
+                  <Laptop className="h-4 w-4" /> Remote
+                </span>
+                <span className="mt-1 block text-xs opacity-75">Students join from their own PCs</span>
+              </button>
+              <button
+                type="button"
+                disabled={isEditMode}
+                onClick={() => setEvaluationMode("physical")}
+                className={`rounded-xl border p-3 text-left transition disabled:cursor-not-allowed ${
+                  evaluationMode === "physical"
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-emerald-300"
+                }`}
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold">
+                  <Building2 className="h-4 w-4" /> Physical
+                </span>
+                <span className="mt-1 block text-xs opacity-75">Students use the examiner-room kiosk</span>
+              </button>
+            </div>
+            <p className="mt-1.5 text-xs text-gray-400">
+              This method is fixed after the project is created.
+            </p>
+          </div>
+
+          {evaluationMode === "physical" && (
+            <div className="space-y-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1.5">
+                  <Building2 className="h-4 w-4 text-emerald-600" /> Physical Location
+                  <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Engineering Building — Room 42"
+                  value={physicalLocation}
+                  onChange={(e) => {
+                    setPhysicalLocation(e.target.value)
+                    setErrors((prev) => ({ ...prev, physical_location: undefined }))
+                  }}
+                  className={errors.physical_location ? inputError : inputNormal}
+                />
+                {errors.physical_location && (
+                  <p className="text-red-500 text-xs mt-1">{errors.physical_location}</p>
+                )}
+              </div>
+
+              {!isEditMode && (
+                <div>
+                  <label className="text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1.5">
+                    <LockKeyhole className="h-4 w-4 text-emerald-600" /> Panel Password
+                    <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="At least 4 characters"
+                    value={physicalPanelPin}
+                    onChange={(e) => {
+                      setPhysicalPanelPin(e.target.value)
+                      setErrors((prev) => ({ ...prev, physical_panel_pin: undefined }))
+                    }}
+                    className={errors.physical_panel_pin ? inputError : inputNormal}
+                  />
+                  {errors.physical_panel_pin ? (
+                    <p className="text-red-500 text-xs mt-1">{errors.physical_panel_pin}</p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-1">
+                      The examiner uses this password to open and close the restricted kiosk.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Submission Deadline */}
           <div>
