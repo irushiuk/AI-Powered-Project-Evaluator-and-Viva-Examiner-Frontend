@@ -7,7 +7,9 @@ import {
   Users,
   User,
   Calendar,
+  Building2,
   GraduationCap,
+  Laptop,
 } from "lucide-react"
 import DashboardLayout from "@/components/teacherDashboard/DashboardLayout"
 import RubricsTab from "@/components/teacherDashboard/RubircsTab"
@@ -103,6 +105,17 @@ export default function ProjectDetailPage() {
                   </>
                 )}
               </span>
+              <span className={`text-xs px-2.5 py-0.5 rounded-full border font-medium flex items-center gap-1 ${
+                project.evaluation_mode === "physical"
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : "bg-indigo-50 text-indigo-700 border-indigo-200"
+              }`}>
+                {project.evaluation_mode === "physical" ? (
+                  <><Building2 className="h-3.5 w-3.5" /> Physical evaluation</>
+                ) : (
+                  <><Laptop className="h-3.5 w-3.5" /> Remote evaluation</>
+                )}
+              </span>
             </div>
 
             {project.description && (
@@ -118,6 +131,12 @@ export default function ProjectDetailPage() {
                 <GraduationCap className="h-4 w-4 text-gray-400" />
                 {project.academic_year}
               </span>
+              {project.evaluation_mode === "physical" && project.physical_location && (
+                <span className="flex items-center gap-1.5">
+                  <Building2 className="h-4 w-4 text-gray-400" />
+                  {project.physical_location}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -145,7 +164,14 @@ export default function ProjectDetailPage() {
         {/* {activeTab === "overview"    && <OverviewTab project={project} />} */}
         {activeTab === "rubrics"     && <RubricsTab projectId={id} />}
         {activeTab === "questions"   && <VivaQuestionsTab projectId={id} />}
-        {activeTab === "sessions"    && <SessionsTab projectId={id} isGroupProject={project.is_group_project} />}
+        {activeTab === "sessions"    && (
+          <SessionsTab
+            projectId={id}
+            isGroupProject={project.is_group_project}
+            evaluationMode={project.evaluation_mode}
+            physicalLocation={project.physical_location}
+          />
+        )}
         {activeTab === "submissions" && <SubmissionsTab projectId={id} />}
         {activeTab === "module-content" && <ModuleContentTab projectId={id} />}
       </div>
