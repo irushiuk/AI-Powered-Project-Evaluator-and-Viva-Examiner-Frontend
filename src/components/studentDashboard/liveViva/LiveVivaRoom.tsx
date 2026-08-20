@@ -84,7 +84,6 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   const handleLocalTracks = useCallback((_videoTrack: unknown, audioTrack: unknown) => {
     setDemoAudioTrack(audioTrack as IMicrophoneAudioTrack | null)
   }, [])
-
   const { stopCapture } = useDemoCapture({
     sessionId,
     enabled: phase === 'demo_in_progress',
@@ -104,9 +103,13 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     stopRecognition,
     abortRecognition,
   } = useVivaSpeech({
+    sessionId,
     questionText: hasFinished
       ? null
       : (examinerQuestion?.question_text ?? currentQuestion?.question_text ?? null),
+    questionId: examinerQuestion ? null : (currentQuestion?.question_id ?? null),
+    audioUrl: examinerQuestion ? null : (currentQuestion?.audio_url ?? null),
+    ttsStatus: examinerQuestion ? 'disabled' : (currentQuestion?.tts_status ?? 'disabled'),
     canListen: (
       !hasFinished && !isLoading && !isSubmitting && phase === 'viva_in_progress' &&
       Boolean(currentQuestion || examinerQuestion)
@@ -119,7 +122,6 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   useEffect(() => {
     if (currentQuestion || examinerQuestion) setShowQAPanel(true)
   }, [currentQuestion, examinerQuestion])
-
   const loadFirstQuestion = useCallback(async () => {
     if (startRequestRef.current) return
     startRequestRef.current = true

@@ -115,6 +115,8 @@ export function normalizeQuestion(data: Partial<VivaQuestion>): VivaQuestion | n
     difficulty: (data.difficulty ?? 'medium') as VivaDifficulty,
     criterion: data.criterion ?? 'General',
     question_number: data.question_number ?? 1,
+    tts_status: data.tts_status ?? 'disabled',
+    audio_url: data.audio_url ?? null,
   }
 }
 

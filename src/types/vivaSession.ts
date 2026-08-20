@@ -1,4 +1,5 @@
 export type VivaDifficulty = 'easy' | 'medium' | 'hard'
+export type VivaTtsStatus = 'disabled' | 'pending' | 'ready' | 'failed' | 'unavailable'
 
 export type BloomsLevel =
   | 'Remember'
@@ -15,6 +16,8 @@ export type VivaQuestion = {
   difficulty: VivaDifficulty
   criterion: string
   question_number: number
+  tts_status?: VivaTtsStatus
+  audio_url?: string | null
 }
 
 export type StartVivaResponse = VivaQuestion & {

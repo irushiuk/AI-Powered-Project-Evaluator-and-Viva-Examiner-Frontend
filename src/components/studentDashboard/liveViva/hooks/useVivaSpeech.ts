@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { vivaSessionService } from '@/services/vivaSessionService'
+import type { VivaTtsStatus } from '@/types/vivaSession'
 import {
   FATAL_SPEECH_ERRORS,
   pickVoice,
@@ -7,12 +9,24 @@ import {
 } from '../utils/liveVivaUtils'
 
 interface UseVivaSpeechOptions {
+  sessionId: string
   questionText: string | null
+  questionId: string | null
+  audioUrl?: string | null
+  ttsStatus: VivaTtsStatus
   canListen: boolean
   onFinalTranscript: (transcript: string) => void
 }
 
-export function useVivaSpeech({ questionText, canListen, onFinalTranscript }: UseVivaSpeechOptions) {
+export function useVivaSpeech({
+  sessionId,
+  questionText,
+  questionId,
+  audioUrl,
+  ttsStatus,
+  canListen,
+  onFinalTranscript,
+}: UseVivaSpeechOptions) {
   const [interimTranscript, setInterimTranscript] = useState('')
   const [isRecording, setIsRecording] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
@@ -21,6 +35,8 @@ export function useVivaSpeech({ questionText, canListen, onFinalTranscript }: Us
   const [recordingTime, setRecordingTime] = useState(0)
 
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioUrlRef = useRef<string | null>(null)
   const micBlockedRef = useRef(false)
   const voiceRef = useRef<SpeechSynthesisVoice | null>(null)
   const onFinalTranscriptRef = useRef(onFinalTranscript)
@@ -95,18 +111,183 @@ export function useVivaSpeech({ questionText, canListen, onFinalTranscript }: Us
 
   useEffect(() => {
     if (!questionText) return
+
+    let disposed = false
+    const controller = new AbortController()
     window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(questionText)
-    utterance.voice = voiceRef.current
-    utterance.rate = 0.95
-    utterance.pitch = 1
-    utterance.onstart = () => setIsSpeaking(true)
-    utterance.onend = () => setIsSpeaking(false)
-    utterance.onerror = () => setIsSpeaking(false)
+    audioRef.current?.pause()
+    audioRef.current = null
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
+    audioUrlRef.current = null
     setIsSpeaking(true)
-    window.speechSynthesis.speak(utterance)
-    return () => window.speechSynthesis.cancel()
-  }, [questionText])
+
+    const finishSpeaking = () => {
+      if (!disposed) setIsSpeaking(false)
+    }
+
+    const speakWithBrowser = (reason = 'normal fallback') => {
+      if (disposed) return
+      // Stop any existing audio or speech
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
+      window.speechSynthesis.cancel()
+
+      console.log(`[VivaSpeech] 🗣️ Speaking with browser speechSynthesis (reason: ${reason})`)
+      const utterance = new SpeechSynthesisUtterance(questionText)
+      utterance.voice = voiceRef.current
+      utterance.rate = 0.95
+      utterance.pitch = 1
+      utterance.onstart = () => {
+        if (!disposed) setIsSpeaking(true)
+      }
+      utterance.onend = finishSpeaking
+      utterance.onerror = finishSpeaking
+      window.speechSynthesis.speak(utterance)
+    }
+
+    const wait = (milliseconds: number) => new Promise<void>((resolve) => {
+      window.setTimeout(resolve, milliseconds)
+    })
+
+    /** Try to play audio from a URL (signed Azure URL or blob URL). */
+    const playFromUrl = (audioUrl: string, source = 'Azure SAS URL'): Promise<boolean> => {
+      if (disposed) return Promise.resolve(false)
+      return new Promise<boolean>((resolve) => {
+        console.log(`[VivaSpeech] 🎵 Attempting audio playback with source: ${source}`)
+        const audio = new Audio(audioUrl)
+        audioRef.current = audio
+
+        let resolved = false
+        const cleanupAndResolve = (success: boolean) => {
+          if (resolved) return
+          resolved = true
+          if (!success) {
+            audio.pause()
+            if (audioRef.current === audio) {
+              audioRef.current = null
+            }
+          }
+          resolve(success)
+        }
+
+        audio.onplay = () => {
+          // Cancel any browser speech synthesis immediately so voices never overlap
+          window.speechSynthesis.cancel()
+          console.log('[VivaSpeech] ▶️ Audio playback started')
+          cleanupAndResolve(true)
+        }
+
+        audio.onended = () => {
+          console.log('[VivaSpeech] ⏹️ Audio playback finished')
+          finishSpeaking()
+        }
+
+        audio.onerror = (e) => {
+          console.warn(`[VivaSpeech] ⚠️ Audio error loading source (${source}):`, e)
+          cleanupAndResolve(false)
+        }
+
+        audio.play().catch((err) => {
+          console.warn('[VivaSpeech] ⚠️ audio.play() rejected:', err)
+          cleanupAndResolve(false)
+        })
+      })
+    }
+
+    const speakGeneratedAudio = async () => {
+      console.log('[VivaSpeech] speakGeneratedAudio triggered:', {
+        questionId,
+        ttsStatus,
+        hasDirectAudioUrl: Boolean(audioUrl),
+        questionText: questionText?.slice(0, 40) + '...',
+      })
+
+      if (!questionId || ttsStatus === 'disabled' || ttsStatus === 'failed') {
+        speakWithBrowser(`ttsStatus is '${ttsStatus}' or questionId missing`)
+        return
+      }
+
+      // 1. FAST PATH: If the backend already provided an audioUrl directly with the question
+      if (audioUrl) {
+        console.log('[VivaSpeech] 🚀 Fast Path: Attempting direct pre-signed audioUrl...')
+        const played = await playFromUrl(audioUrl, 'Direct question payload SAS URL')
+        if (played) return
+        if (disposed) return
+        console.log('[VivaSpeech] Fast path audio not ready on storage yet; polling /audio/ endpoint...')
+      }
+
+      // 2. RETRY LOOP: Polls /audio/ until status is ready or retries expire
+      try {
+        const delays = [150, 300, 500, 800]
+        for (let i = 0; i < delays.length; i += 1) {
+          const delayMs = delays[i]
+          if (delayMs) await wait(delayMs)
+          if (disposed) return
+          console.log(`[VivaSpeech] 📡 Requesting question audio (attempt ${i + 1}/${delays.length}, delay ${delayMs}ms)...`)
+          const response = await vivaSessionService.getQuestionAudio(
+            sessionId,
+            questionId,
+            controller.signal,
+          )
+          console.log(`[VivaSpeech] 📥 Response status: ${response.status}, Content-Type: ${response.headers.get('content-type')}`)
+
+          if (response.ok) {
+            const contentType = response.headers.get('content-type') || ''
+
+            // Signed URL response (JSON) — browser streams directly from Azure
+            if (contentType.includes('application/json')) {
+              const data = await response.json()
+              if (disposed) return
+              console.log('[VivaSpeech] 🌐 Received signed audio JSON payload:', data)
+              if (data.audio_url) {
+                if (await playFromUrl(data.audio_url, 'Signed Azure URL')) return
+                if (disposed) return
+              }
+            }
+
+            // Legacy proxy fallback (binary audio/mpeg)
+            console.log('[VivaSpeech] 📦 Received binary audio stream; converting to Blob URL...')
+            const blob = await response.blob()
+            if (disposed) return
+            const blobUrl = URL.createObjectURL(blob)
+            audioUrlRef.current = blobUrl
+            if (await playFromUrl(blobUrl, 'Blob URL')) return
+            URL.revokeObjectURL(blobUrl)
+            audioUrlRef.current = null
+            if (disposed) return
+          }
+          if (response.status !== 202 && response.status !== 200) {
+            console.warn(`[VivaSpeech] Response was ${response.status}; stopping retries`)
+            break
+          }
+        }
+      } catch (err) {
+        if (controller.signal.aborted) {
+          console.log('[VivaSpeech] Request aborted due to question change or component unmount')
+          return
+        }
+        console.warn('[VivaSpeech] Error in speakGeneratedAudio:', err)
+      }
+
+      if (!disposed) {
+        speakWithBrowser('all audio fetch attempts exhausted')
+      }
+    }
+
+    void speakGeneratedAudio()
+    return () => {
+      disposed = true
+      controller.abort()
+      window.speechSynthesis.cancel()
+      audioRef.current?.pause()
+      audioRef.current = null
+      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
+      audioUrlRef.current = null
+      setIsSpeaking(false)
+    }
+  }, [audioUrl, questionId, questionText, sessionId, ttsStatus])
 
   useEffect(() => {
     if (!canListen || isSpeaking || micMuted || isRecording) return
@@ -125,6 +306,8 @@ export function useVivaSpeech({ questionText, canListen, onFinalTranscript }: Us
   useEffect(() => () => {
     recognitionRef.current?.abort()
     window.speechSynthesis.cancel()
+    audioRef.current?.pause()
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
   }, [])
 
   const setMicMuted = useCallback((muted: boolean) => {
