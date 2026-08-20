@@ -1,36 +1,49 @@
 "use client"
 
-import { useTheme } from "next-themes"
 import { Toaster as Sonner } from "sonner"
-
-import { CheckCircle2, AlertCircle } from "lucide-react"
+import Image from "next/image"
 
 type ToasterProps = React.ComponentProps<typeof Sonner>
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme="light"
       className="toaster group"
+      style={{ fontFamily: 'var(--font-poppins), Poppins, sans-serif' }}
       toastOptions={{
         classNames: {
           toast:
-            "group toast group-[.toaster]:bg-white group-[.toaster]:text-black group-[.toaster]:border-gray-200 shadow-lg text-base",
-          title: "group-[.toast]:font-medium text-[15px]",
-          description: "group-[.toast]:text-gray-500 text-sm",
+            "!bg-[#E8F5F1] !text-[#0A9B78] !border-l-4 !border-l-[#0A9B78] !border-t-0 !border-r-0 !border-b-0 shadow-lg rounded-lg p-4 !font-[family-name:var(--font-poppins)]",
+          title: "!text-[#0A9B78] text-sm font-normal !font-[family-name:var(--font-poppins)] !m-0",
+          description: "!text-[#0A9B78] text-sm font-normal !font-[family-name:var(--font-poppins)] !m-0 !mt-1",
           actionButton:
-            "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
+            "!bg-primary !text-primary-foreground !font-[family-name:var(--font-poppins)]",
           cancelButton:
-            "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+            "!bg-muted !text-muted-foreground !font-[family-name:var(--font-poppins)]",
           error:
-            "group toast group-[.toaster]:bg-red-500 group-[.toaster]:text-white group-[.toaster]:border-red-600",
+            "!bg-[#FDEBEC] !text-[#E31B23] !border-l-4 !border-l-[#E31B23] !border-t-0 !border-r-0 !border-b-0 shadow-lg rounded-lg p-4 !font-[family-name:var(--font-poppins)] [&_[data-title]]:!text-[#E31B23] [&_[data-description]]:!text-[#E31B23]",
         },
       }}
       icons={{
-        success: <CheckCircle2 className="h-5 w-5 text-green-500 fill-green-100" />,
-        error: <AlertCircle className="h-5 w-5 text-white" />,
+        success: (
+          <Image
+            src="/images/success-icon.svg"
+            alt="Success"
+            width={24}
+            height={24}
+            className="shrink-0"
+          />
+        ),
+        error: (
+          <Image
+            src="/images/error-icon.svg"
+            alt="Error"
+            width={24}
+            height={24}
+            className="shrink-0"
+          />
+        ),
       }}
       {...props}
     />

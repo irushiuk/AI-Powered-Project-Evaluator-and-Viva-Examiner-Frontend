@@ -64,6 +64,16 @@ export const vivaSessionService = {
     return readJson<CurrentQuestionResponse>(res, 'Failed to fetch current question')
   },
 
+  /** Fetch generated question speech. A 202 response means speculation is
+   * still running; callers may retry briefly before using browser speech. */
+  async getQuestionAudio(
+    sessionId: string,
+    questionId: string,
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    return apiFetch(VIVA_API.questionAudio(sessionId, questionId), { signal })
+  },
+
   /** Student starts the demo/presentation phase (scheduled → demo in progress). */
   async startDemo(sessionId: string): Promise<void> {
     const res = await apiFetch(SESSION_API.startDemo(sessionId), { method: 'POST' })

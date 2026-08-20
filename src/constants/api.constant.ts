@@ -64,6 +64,8 @@ export const VIVA_API = {
   submitAnswer: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/answer/`,
   sessionStatus: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/status/`,
   currentQuestion: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/current/`,
+  questionAudio: (sessionId: string, questionId: string) =>
+    `${API_BASE}/viva/sessions/${sessionId}/questions/${questionId}/audio/`,
   sessionReport: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/report/`,
   detailedReport: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/detailed-report/`,
   patchAnswerScore: (sessionId: string, answerId: string) => `${API_BASE}/viva/sessions/${sessionId}/answers/${answerId}/score/`,
