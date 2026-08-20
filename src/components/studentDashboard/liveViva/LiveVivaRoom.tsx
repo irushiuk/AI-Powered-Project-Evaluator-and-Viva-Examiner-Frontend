@@ -84,6 +84,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   const handleLocalTracks = useCallback((_videoTrack: unknown, audioTrack: unknown) => {
     setDemoAudioTrack(audioTrack as IMicrophoneAudioTrack | null)
   }, [])
+
   const { stopCapture } = useDemoCapture({
     sessionId,
     enabled: phase === 'demo_in_progress',
@@ -108,7 +109,6 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       ? null
       : (examinerQuestion?.question_text ?? currentQuestion?.question_text ?? null),
     questionId: examinerQuestion ? null : (currentQuestion?.question_id ?? null),
-    audioUrl: examinerQuestion ? null : (currentQuestion?.audio_url ?? null),
     ttsStatus: examinerQuestion ? 'disabled' : (currentQuestion?.tts_status ?? 'disabled'),
     canListen: (
       !hasFinished && !isLoading && !isSubmitting && phase === 'viva_in_progress' &&
@@ -122,6 +122,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   useEffect(() => {
     if (currentQuestion || examinerQuestion) setShowQAPanel(true)
   }, [currentQuestion, examinerQuestion])
+
   const loadFirstQuestion = useCallback(async () => {
     if (startRequestRef.current) return
     startRequestRef.current = true
@@ -159,35 +160,35 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   useEffect(() => {
     mountedRef.current = true
 
-    // Read the current phase and let the student drive the transitions.
-    //   • resume (question already cached) → straight to the viva
-    //   • otherwise adopt the server phase (scheduled lobby / demo / viva)
-    // A status hiccup falls back to a scheduled lobby so nothing is blocked.
-    ;(async () => {
-      try {
-        const status = await vivaSessionService.getSessionStatus(sessionId)
-        if (!mountedRef.current) return
-        setDemoEnabled(status.demo_enabled)
-        setPhase(status.phase)
-        if (status.phase === 'completed') {
-          setHasFinished(true)
-          setIsLoading(false)
-        } else if (status.phase === 'viva_in_progress') {
-          loadFirstQuestion()
-        } else {
-          setIsLoading(false)
+      // Read the current phase and let the student drive the transitions.
+      //   • resume (question already cached) → straight to the viva
+      //   • otherwise adopt the server phase (scheduled lobby / demo / viva)
+      // A status hiccup falls back to a scheduled lobby so nothing is blocked.
+      ; (async () => {
+        try {
+          const status = await vivaSessionService.getSessionStatus(sessionId)
+          if (!mountedRef.current) return
+          setDemoEnabled(status.demo_enabled)
+          setPhase(status.phase)
+          if (status.phase === 'completed') {
+            setHasFinished(true)
+            setIsLoading(false)
+          } else if (status.phase === 'viva_in_progress') {
+            loadFirstQuestion()
+          } else {
+            setIsLoading(false)
+          }
+        } catch {
+          if (!mountedRef.current) return
+          if (getCachedQuestion(sessionId)) {
+            setPhase('viva_in_progress')
+            loadFirstQuestion()
+          } else {
+            setPhase('scheduled')
+            setIsLoading(false)
+          }
         }
-      } catch {
-        if (!mountedRef.current) return
-        if (getCachedQuestion(sessionId)) {
-          setPhase('viva_in_progress')
-          loadFirstQuestion()
-        } else {
-          setPhase('scheduled')
-          setIsLoading(false)
-        }
-      }
-    })()
+      })()
 
     return () => {
       mountedRef.current = false
@@ -224,7 +225,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     // Initial fetch
     liveQuestionService.status(sessionId).then(st => {
       if (mountedRef.current) setTakeoverStatus(st)
-    }).catch(() => {})
+    }).catch(() => { })
     return () => window.clearInterval(id)
   }, [sessionId, hasFinished, phase])
 
@@ -236,7 +237,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       try {
         const status = await vivaSessionService.getSessionStatus(sessionId)
         if (!mountedRef.current) return
-        
+
         if (status.phase === 'completed') {
           window.clearInterval(id)
           setPhase('completed')
@@ -570,9 +571,9 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       stopCapture()
 
       await vivaSessionService.endDemo(sessionId)
-      
+
       toast.info('Analyzing presentation talking points and slides. Please wait...')
-      
+
       let attempts = 0
       while (attempts < 60) { // Poll up to 2 minutes max
         const status = await vivaSessionService.getDemoQueueStatus(sessionId)
