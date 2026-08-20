@@ -1,4 +1,4 @@
-import { LiveVivaRoom } from '@/components/studentDashboard/LiveVivaRoom'
+import { LiveVivaRoom } from '@/components/studentDashboard/liveViva'
 
 export default async function LiveSessionPage({
   params,
