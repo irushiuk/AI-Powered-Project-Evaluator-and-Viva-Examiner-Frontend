@@ -70,6 +70,21 @@ export const VIVA_API = {
   approveScores: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/approve-scores/`,
 }
 
+export const PHYSICAL_API = {
+  settings: (projectId: string) => `${API_BASE}/physical/projects/${projectId}/settings/`,
+  openKiosk: (projectId: string) => `${API_BASE}/physical/projects/${projectId}/kiosk/open/`,
+  closeKiosk: `${API_BASE}/physical/kiosk/close/`,
+  sessions: `${API_BASE}/physical/kiosk/sessions/`,
+  activeRun: `${API_BASE}/physical/kiosk/active/`,
+  startSession: (sessionId: string) => `${API_BASE}/physical/kiosk/sessions/${sessionId}/start/`,
+  completeDemo: (sessionId: string) => `${API_BASE}/physical/kiosk/sessions/${sessionId}/demo/complete/`,
+  finishSession: (sessionId: string) => `${API_BASE}/physical/kiosk/sessions/${sessionId}/finish/`,
+  completeSession: (sessionId: string) => `${API_BASE}/physical/kiosk/sessions/${sessionId}/complete/`,
+  recordingChunk: (sessionId: string, chunkIndex: number) => `${API_BASE}/physical/kiosk/sessions/${sessionId}/recording/chunks/${chunkIndex}/`,
+  finalizeRecording: (sessionId: string) => `${API_BASE}/physical/kiosk/sessions/${sessionId}/recording/finalize/`,
+  recordingStatus: (sessionId: string) => `${API_BASE}/physical/kiosk/sessions/${sessionId}/recording/status/`,
+}
+
 export const CODE_ANALYSIS_API = {
   status: (codeSubmissionId: string) => `${API_BASE}/code-analysis/submissions/${codeSubmissionId}/status/`,
   sonarSummary: (codeSubmissionId: string) => `${API_BASE}/code-analysis/submissions/${codeSubmissionId}/sonar-summary/`,
@@ -132,5 +147,6 @@ export default {
   CODE_ANALYSIS_API,
   SESSIONS_API,
   VIVA_API,
+  PHYSICAL_API,
   STUDENT_API,
 }

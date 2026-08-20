@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { sessionService } from "@/services/sessionService"
+import { physicalEvaluationService } from "@/services/physicalEvaluationService"
+import type { EvaluationMode } from "@/types/project"
 import {
   Session,
   AutoSchedulePayload,
@@ -21,6 +23,9 @@ import {
   MapPin,
   FileText,
   Monitor,
+  Building2,
+  LockKeyhole,
+  ShieldCheck,
 } from "lucide-react"
 import { toast } from "sonner"
 import { formatColomboDateTime, formatColomboTime, getColomboTimezoneLabel } from "@/utils/datetime"
@@ -31,9 +36,13 @@ import { formatColomboDateTime, formatColomboTime, getColomboTimezoneLabel } fro
 export default function SessionsTab({
   projectId,
   isGroupProject,
+  evaluationMode,
+  physicalLocation,
 }: {
   projectId: string
   isGroupProject: boolean
+  evaluationMode: EvaluationMode
+  physicalLocation: string | null
 }) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
@@ -41,6 +50,7 @@ export default function SessionsTab({
   const [editingSession, setEditingSession] = useState<Session | null>(null)
   const [confirmReset, setConfirmReset] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [openingPhysicalPanel, setOpeningPhysicalPanel] = useState(false)
 
   const refresh = async () => {
     try {
@@ -101,6 +111,14 @@ export default function SessionsTab({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {evaluationMode === "physical" && (
+            <Button
+              onClick={() => setOpeningPhysicalPanel(true)}
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              <Building2 className="mr-2 h-4 w-4" /> Open Physical Panel
+            </Button>
+          )}
           {sessions.length > 0 && (
             confirmReset ? (
               <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
@@ -201,7 +219,7 @@ export default function SessionsTab({
                     <Pencil className="h-3 w-3" /> Edit
                   </button>
                 )}
-                {displayStatus === "in_progress" && (
+                {displayStatus === "in_progress" && evaluationMode === "remote" && (
                   <Link href={`/dashboard/teacher/sessions/${session.id}/live-room`}>
                     <button className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-1.5 rounded-lg transition flex items-center gap-1 font-semibold cursor-pointer">
                       <Monitor className="h-3 w-3" /> Join Live Session
@@ -246,6 +264,107 @@ export default function SessionsTab({
           onUpdated={async () => { setEditingSession(null); await refresh() }}
         />
       )}
+
+      {openingPhysicalPanel && (
+        <PhysicalPanelModal
+          projectId={projectId}
+          location={physicalLocation}
+          onClose={() => setOpeningPhysicalPanel(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function PhysicalPanelModal({
+  projectId,
+  location,
+  onClose,
+}: {
+  projectId: string
+  location: string | null
+  onClose: () => void
+}) {
+  const [pin, setPin] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
+
+  const handleOpen = async () => {
+    if (!pin || submitting) return
+    setSubmitting(true)
+    setError("")
+    try {
+      await physicalEvaluationService.openKiosk(projectId, pin)
+      // A hard replacement clears the authenticated dashboard state and keeps
+      // the examiner's pages out of browser history before students take over.
+      window.location.replace("/physical/kiosk")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to open the physical panel")
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="border-b border-emerald-100 bg-emerald-50 px-7 py-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+              <LockKeyhole className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-gray-900">Open Physical Evaluation Panel</h2>
+              <p className="mt-0.5 text-xs text-gray-500">{location || "Configured physical location"}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4 px-7 py-6">
+          <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>
+              Opening the panel signs this browser out of the examiner account and shows only today&apos;s
+              student sessions. The same password is required to close it.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="physical-panel-pin" className="mb-1.5 block text-sm font-medium text-gray-700">
+              Panel password
+            </label>
+            <input
+              id="physical-panel-pin"
+              type="password"
+              autoFocus
+              autoComplete="current-password"
+              value={pin}
+              onChange={(event) => {
+                setPin(event.target.value)
+                setError("")
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") handleOpen()
+              }}
+              className={`w-full rounded-xl border p-3 text-sm outline-none transition focus:ring-2 focus:ring-emerald-100 ${
+                error ? "border-red-400 bg-red-50" : "border-gray-200 focus:border-emerald-500"
+              }`}
+              placeholder="Enter the private panel password"
+            />
+            {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 border-t border-gray-100 bg-gray-50 px-7 py-4">
+          <Button variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button
+            onClick={handleOpen}
+            disabled={!pin || submitting}
+            className="bg-emerald-600 text-white hover:bg-emerald-700"
+          >
+            {submitting ? "Securing browser..." : "Open & Sign Out"}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }
