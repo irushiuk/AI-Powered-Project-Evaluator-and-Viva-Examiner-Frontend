@@ -109,6 +109,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       ? null
       : (examinerQuestion?.question_text ?? currentQuestion?.question_text ?? null),
     questionId: examinerQuestion ? null : (currentQuestion?.question_id ?? null),
+    audioUrl: examinerQuestion ? null : (currentQuestion?.audio_url ?? null),
     ttsStatus: examinerQuestion ? 'disabled' : (currentQuestion?.tts_status ?? 'disabled'),
     canListen: (
       !hasFinished && !isLoading && !isSubmitting && phase === 'viva_in_progress' &&
