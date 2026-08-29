@@ -1,4 +1,4 @@
-import { PHYSICAL_API, VIVA_API } from "@/constants/api.constant";
+import { ATTRIBUTION_API, PHYSICAL_API, VIVA_API } from "@/constants/api.constant";
 import type {
   CurrentQuestionResponse,
   KioskOpenResponse,
@@ -228,6 +228,63 @@ export const physicalEvaluationService = {
   ): Promise<PhysicalRecordingUpload> {
     const response = await kioskFetch(PHYSICAL_API.recordingStatus(sessionId));
     return readJson(response, "Failed to load recording upload status");
+  },
+
+  /**
+   * Bind each face in the room to a roster student.
+   *
+   * A physical group viva has one camera and everyone in frame at once, so
+   * before lip activity can name a speaker, each face has to be tied to a
+   * student. One still frame is matched against enrolment photos server-side.
+   *
+   * Returns which students were recognised and which have no enrolment photo
+   * (those can never be credited automatically). Never throws — attribution
+   * is decision-support and the manual dropdown remains the fallback.
+   */
+  async bindSeats(
+    sessionId: string,
+    frame: Blob,
+  ): Promise<{
+    bindings: { student_id: string | null; confidence: number }[];
+    unmatched: number;
+    missing_enrollment: string[];
+  } | null> {
+    try {
+      const formData = new FormData();
+      formData.append("frame", frame, "bind.jpg");
+      const response = await kioskFetch(ATTRIBUTION_API.bind(sessionId), {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) return null;
+      const payload = await response.json().catch(() => null);
+      return payload?.data ?? null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Report who was speaking. Coalesced spans, not per-frame samples.
+   * Silent on failure: a dropped batch costs attribution, not the exam.
+   */
+  async sendSpeakerEvidence(
+    sessionId: string,
+    events: unknown[],
+  ): Promise<number> {
+    if (!events.length) return 0;
+    try {
+      const response = await kioskFetch(ATTRIBUTION_API.evidence(sessionId), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: "live_cv", events }),
+      });
+      if (!response.ok) return 0;
+      const payload = await response.json().catch(() => null);
+      return payload?.data?.stored ?? 0;
+    } catch {
+      return 0;
+    }
   },
 
   async closeKiosk(pin: string): Promise<void> {

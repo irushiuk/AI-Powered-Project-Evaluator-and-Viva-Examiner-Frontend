@@ -14,6 +14,7 @@ import {
   User,
 } from 'lucide-react'
 import { agoraService } from '@/services/agoraService'
+import { ActiveSpeakerCollector } from '@/services/attributionService'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 
@@ -68,6 +69,11 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
   const [pipWindow, setPipWindow] = useState<Window | null>(null)
 
   const clientRef = useRef<any>(null)
+  // Speaker attribution: coalesces Agora's volume ticks into speaking spans so
+  // the backend can tell who answered each question. Agora reports per-UID
+  // levels because every student publishes from their own device, and the UID
+  // maps deterministically back to a student.
+  const speakerCollectorRef = useRef<ActiveSpeakerCollector | null>(null)
   const screenClientRef = useRef<any>(null)
   const credentialsRef = useRef<any>(null)
   const localVideoDivRef = useRef<HTMLDivElement>(null)
@@ -204,6 +210,25 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
           if (active) setRoster(rosterMap)
         } catch (err) {
           console.warn('Failed to load Agora roster names:', err)
+        }
+
+        // ── Speaker attribution ────────────────────────────────────────────
+        // Report who is speaking, so each answer can be credited to the right
+        // student. Wrapped defensively: attribution is decision-support, and
+        // must never be able to break the call itself.
+        try {
+          const collector = new ActiveSpeakerCollector(sessionId)
+          speakerCollectorRef.current = collector
+          collector.start()
+          // 200ms is Agora's minimum; the collector coalesces the ticks.
+          client.enableAudioVolumeIndicator()
+          client.on('volume-indicator', (volumes: any[]) => {
+            speakerCollectorRef.current?.observe(
+              volumes.map((v) => ({ uid: v.uid, level: v.level })),
+            )
+          })
+        } catch (err) {
+          console.warn('Speaker attribution unavailable:', err)
         }
 
         // Set up event listeners
@@ -364,6 +389,12 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
       active = false
       // Fire-and-forget cleanup (the NEXT mount's initAgora will await cleanup before proceeding)
       const cleanup = async () => {
+        if (speakerCollectorRef.current) {
+          // Closes any open speaking span and posts the tail, so the last
+          // answer of the session is attributed like every other one.
+          try { await speakerCollectorRef.current.stop() } catch (e) {}
+          speakerCollectorRef.current = null
+        }
         if (localAudioTrackRef.current) {
           try { localAudioTrackRef.current.stop(); localAudioTrackRef.current.close() } catch (e) {}
           localAudioTrackRef.current = null
