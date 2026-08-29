@@ -59,6 +59,18 @@ export const SESSIONS_API = {
   agoraRoster: (id: string) => `${API_BASE}/sessions/${id}/agora-roster/`,
 }
 
+// Speaker attribution — who answered, in a group viva.
+export const ATTRIBUTION_API = {
+  evidence: (id: string) => `${API_BASE}/sessions/${id}/attribution/evidence/`,
+  bind: (id: string) => `${API_BASE}/sessions/${id}/attribution/bind/`,
+  answers: (id: string) => `${API_BASE}/sessions/${id}/attribution/answers/`,
+  confirm: (id: string, answerId: string) =>
+    `${API_BASE}/sessions/${id}/attribution/answers/${answerId}/confirm/`,
+  reconcile: (id: string) => `${API_BASE}/sessions/${id}/attribution/reconcile/`,
+  unknownSpeakers: (id: string) =>
+    `${API_BASE}/sessions/${id}/attribution/unknown-speakers/`,
+}
+
 export const VIVA_API = {
   startSession: `${API_BASE}/viva/sessions/start/`,
   submitAnswer: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/answer/`,
@@ -148,6 +160,7 @@ export default {
   PROJECTS_API,
   CODE_ANALYSIS_API,
   SESSIONS_API,
+  ATTRIBUTION_API,
   VIVA_API,
   PHYSICAL_API,
   STUDENT_API,
