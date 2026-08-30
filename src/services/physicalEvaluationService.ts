@@ -159,6 +159,15 @@ export const physicalEvaluationService = {
     return readJson(response, "Failed to load the current viva question");
   },
 
+  /** Stream or poll the generated examiner voice using the kiosk credential. */
+  async getQuestionAudio(
+    sessionId: string,
+    questionId: string,
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    return kioskFetch(VIVA_API.questionAudio(sessionId, questionId), { signal });
+  },
+
   async completeSession(
     sessionId: string,
     recording: Blob,
