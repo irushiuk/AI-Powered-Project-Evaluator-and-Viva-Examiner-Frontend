@@ -289,7 +289,7 @@ export default function PhysicalKiosk() {
         setBusy(false);
       }
     },
-    [speakQuestion],
+    [bindSeats, speakQuestion],
   );
 
   const resumeActiveRun = useCallback(

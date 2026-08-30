@@ -178,10 +178,9 @@ export const attributionService = {
 /**
  * Collects Agora `volume-indicator` samples into speaking spans.
  *
- * The indicator fires several times a second per publisher. Posting each tick
- * would swamp the tier for no gain, so ticks are coalesced into contiguous
- * spans per UID and flushed periodically: a student talking for twenty
- * seconds becomes one span, not two hundred rows.
+ * Agora reports approximately every two seconds. Samples are coalesced into
+ * contiguous spans and flushed periodically, while a single positive sample
+ * still represents its preceding reporting interval.
  *
  * A UID drops out of the "speaking" set once it has been quiet for
  * GAP_MS — brief dips below the threshold are breath pauses, not turn ends.
@@ -193,13 +192,16 @@ export class ActiveSpeakerCollector {
 
   /** Below this level a publisher is background noise, not speech. */
   static readonly THRESHOLD = 15
-  /** Quiet longer than this closes the span. */
-  static readonly GAP_MS = 900
+  /** Agora's documented volume-indicator reporting interval. */
+  static readonly SAMPLE_PERIOD_MS = 2000
+  /** One quiet report closes the current speaking span. */
+  static readonly GAP_MS = 1800
   /** Spans shorter than this are noise; the backend drops them anyway. */
   static readonly MIN_SPAN_MS = 250
 
   constructor(
     private sessionId: string,
+    private observedUid: string | number,
     private flushMs = 5000,
   ) {}
 
@@ -214,13 +216,18 @@ export class ActiveSpeakerCollector {
 
     for (const { uid, level } of volumes) {
       const key = String(uid)
+      if (key !== String(this.observedUid)) continue
       if (level >= ActiveSpeakerCollector.THRESHOLD) {
         const span = this.open.get(key)
         if (span) {
           span.last = now
           span.peak = Math.max(span.peak, level)
         } else {
-          this.open.set(key, { start: now, last: now, peak: level })
+          this.open.set(key, {
+            start: now - ActiveSpeakerCollector.SAMPLE_PERIOD_MS,
+            last: now,
+            peak: level,
+          })
         }
       }
     }

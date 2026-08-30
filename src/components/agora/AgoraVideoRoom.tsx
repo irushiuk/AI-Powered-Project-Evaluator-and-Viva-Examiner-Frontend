@@ -237,37 +237,17 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         // student. Wrapped defensively: attribution is decision-support, and
         // must never be able to break the call itself.
         try {
-          const collector = new ActiveSpeakerCollector(sessionId)
+          const collector = new ActiveSpeakerCollector(sessionId, credentials.uid)
           speakerCollectorRef.current = collector
           collector.start()
-          // 200ms is Agora's minimum; the collector coalesces the ticks.
           client.enableAudioVolumeIndicator()
-          client.on('volume-indicator', (volumes: any[]) => {
+          client.on('volume-indicator', (volumes) => {
             speakerCollectorRef.current?.observe(
               volumes.map((v) => ({ uid: v.uid, level: v.level })),
             )
           })
-        } catch (err) {
-          console.warn('Speaker attribution unavailable:', err)
-        }
-
-        // ── Speaker attribution ────────────────────────────────────────────
-        // Report who is speaking, so each answer can be credited to the right
-        // student. Wrapped defensively: attribution is decision-support, and
-        // must never be able to break the call itself.
-        try {
-          const collector = new ActiveSpeakerCollector(sessionId)
-          speakerCollectorRef.current = collector
-          collector.start()
-          // 200ms is Agora's minimum; the collector coalesces the ticks.
-          client.enableAudioVolumeIndicator()
-          client.on('volume-indicator', (volumes: any[]) => {
-            speakerCollectorRef.current?.observe(
-              volumes.map((v) => ({ uid: v.uid, level: v.level })),
-            )
-          })
-        } catch (err) {
-          console.warn('Speaker attribution unavailable:', err)
+        } catch {
+          // The call remains usable when attribution is unavailable.
         }
 
         // Set up event listeners
@@ -427,7 +407,11 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         if (speakerCollectorRef.current) {
           // Closes any open speaking span and posts the tail, so the last
           // answer of the session is attributed like every other one.
-          try { await speakerCollectorRef.current.stop() } catch (e) {}
+          try {
+            await speakerCollectorRef.current.stop()
+          } catch {
+            // Best-effort evidence flush during room teardown.
+          }
           speakerCollectorRef.current = null
         }
         if (localAudioTrackRef.current) {
