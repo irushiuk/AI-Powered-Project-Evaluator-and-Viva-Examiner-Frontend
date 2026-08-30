@@ -51,9 +51,6 @@ export function AuthProvider({
       // refresh so server components re-render with the authenticated session.
       router.push(getPostLoginRedirect(data.user.role))
       router.refresh()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Login failed")
-      throw err
     } finally {
       setIsLoading(false)
     }
