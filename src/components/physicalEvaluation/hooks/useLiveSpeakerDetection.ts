@@ -41,14 +41,18 @@ export function useLiveSpeakerDetection(options: {
   names: Record<string, string>
   maxFaces: number
   persistEvidence?: boolean
+  paused?: boolean
 }) {
-  const { enabled, sessionId, videoRef, stream, bindings, names, maxFaces, persistEvidence = true } = options
+  const { enabled, sessionId, videoRef, stream, bindings, names, maxFaces, persistEvidence = true, paused = false } = options
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "speaking" | "uncertain" | "unavailable">("idle")
   const [studentId, setStudentId] = useState<string | null>(null)
   const [confidence, setConfidence] = useState(0)
   const [error, setError] = useState("")
   const pending = useRef<Event[]>([]), turn = useRef<Turn | null>(null)
   const previous = useRef<Record<string, number>>({}), sendChain = useRef(Promise.resolve(0))
+  const pausedRef = useRef(paused)
+
+  useEffect(() => { pausedRef.current = paused }, [paused])
 
   const send = useCallback(async () => {
     if (!persistEvidence) { pending.current = []; return 0 }
@@ -103,6 +107,9 @@ export function useLiveSpeakerDetection(options: {
         if (cancelled) return
         setStatus("ready")
         timer = window.setInterval(() => {
+          if (pausedRef.current) {
+            close(); setStudentId(null); setConfidence(0); setStatus("ready"); return
+          }
           const video = videoRef.current
           if (!video || video.readyState < 2 || !landmarker) return
           analyser.getFloatTimeDomainData(samples)

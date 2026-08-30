@@ -38,6 +38,7 @@ import {
 } from "@/components/physicalEvaluation/hooks/useLiveSpeakerDetection";
 import { usePhysicalSessionRecorder } from "@/components/physicalEvaluation/hooks/usePhysicalSessionRecorder";
 import { captureBindingFrames } from "@/components/physicalEvaluation/hooks/captureBindingFrames";
+import { usePhysicalQuestionSpeech } from "@/components/physicalEvaluation/hooks/usePhysicalQuestionSpeech";
 
 type KioskPhase =
   | "loading"
@@ -159,15 +160,6 @@ export default function PhysicalKiosk() {
     )],
     [seatBindings, studentNames],
   );
-  const liveSpeaker = useLiveSpeakerDetection({
-    enabled: phase === "viva" && Boolean(activeSession?.group),
-    sessionId: activeSession?.session_id || null,
-    videoRef,
-    stream: mediaStream,
-    bindings: seatBindings,
-    names: studentNames,
-    maxFaces: activeSession?.group?.members.length || 1,
-  });
   const sessionRecorder = usePhysicalSessionRecorder();
 
   const attachPreview = useCallback(
@@ -199,6 +191,30 @@ export default function PhysicalKiosk() {
     }
     setIsListening(false);
   }, []);
+
+  const {
+    isSpeaking: isQuestionSpeaking,
+    replay: replayQuestion,
+    cancel: cancelQuestionSpeech,
+  } = usePhysicalQuestionSpeech({
+    enabled: phase === "viva",
+    sessionId: activeSession?.session_id || null,
+    question,
+    onPlaybackStart: stopSpeechRecognition,
+  });
+
+  const liveSpeaker = useLiveSpeakerDetection({
+    enabled:
+      phase === "viva" &&
+      Boolean(activeSession?.group),
+    paused: isQuestionSpeaking,
+    sessionId: activeSession?.session_id || null,
+    videoRef,
+    stream: mediaStream,
+    bindings: seatBindings,
+    names: studentNames,
+    maxFaces: activeSession?.group?.members.length || 1,
+  });
 
   const startCamera = useCallback(async () => {
     const existingStream = mediaStreamRef.current;
@@ -232,15 +248,6 @@ export default function PhysicalKiosk() {
     setMediaStream(null);
   }, []);
 
-  const speakQuestion = useCallback((text: string) => {
-    if (!("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.95;
-    utterance.pitch = 1;
-    window.speechSynthesis.speak(utterance);
-  }, []);
-
   const loadSessions = useCallback(async () => {
     const data = await physicalEvaluationService.listSessions();
     setPanel(data);
@@ -251,7 +258,7 @@ export default function PhysicalKiosk() {
   const finalizeEvaluation = useCallback(
     async (sessionId: string) => {
       stopSpeechRecognition();
-      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      cancelQuestionSpeech();
       try {
         try {
           await sessionRecorder.stopAndFinalize(sessionId);
@@ -276,7 +283,13 @@ export default function PhysicalKiosk() {
         setPhase("finish_error");
       }
     },
-    [loadSessions, sessionRecorder, stopCamera, stopSpeechRecognition],
+    [
+      loadSessions,
+      cancelQuestionSpeech,
+      sessionRecorder,
+      stopCamera,
+      stopSpeechRecognition,
+    ],
   );
 
   /**
@@ -357,7 +370,6 @@ export default function PhysicalKiosk() {
         setFeedbackMessage(firstQuestion.message || "");
         setSpeakerId(session.student?.student_id || "group");
         setPhase("viva");
-        speakQuestion(firstQuestion.question_text);
       } catch (vivaError) {
         setError(
           vivaError instanceof Error
@@ -369,7 +381,7 @@ export default function PhysicalKiosk() {
         setBusy(false);
       }
     },
-    [speakQuestion],
+    [],
   );
 
   const resumeActiveRun = useCallback(
@@ -402,12 +414,11 @@ export default function PhysicalKiosk() {
       if (current.question) {
         setQuestion(current.question);
         setPhase("viva");
-        speakQuestion(current.question.question_text);
         return;
       }
       await beginViva(run.session);
     },
-    [beginViva, bindSeats, finalizeEvaluation, sessionRecorder, speakQuestion, startCamera],
+    [beginViva, bindSeats, finalizeEvaluation, sessionRecorder, startCamera],
   );
 
   useEffect(() => {
@@ -473,7 +484,6 @@ export default function PhysicalKiosk() {
   useEffect(() => {
     return () => {
       speechRecognitionRef.current?.abort();
-      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
@@ -561,7 +571,13 @@ export default function PhysicalKiosk() {
   };
 
   const submitAnswer = async () => {
-    if (!activeSession || !question || !answer.trim() || busy) return;
+    if (
+      !activeSession ||
+      !question ||
+      !answer.trim() ||
+      busy ||
+      isQuestionSpeaking
+    ) return;
     stopSpeechRecognition();
     setBusy(true);
     setError("");
@@ -592,7 +608,6 @@ export default function PhysicalKiosk() {
             ? "The question has been clarified."
             : "Answer submitted."),
       );
-      speakQuestion(result.next_question.question_text);
     } catch (answerError) {
       setError(
         answerError instanceof Error
@@ -605,6 +620,10 @@ export default function PhysicalKiosk() {
   };
 
   const startListening = () => {
+    if (isQuestionSpeaking) {
+      toast.info("Wait until the question has finished playing.");
+      return;
+    }
     if (isListening) {
       stopSpeechRecognition();
       return;
@@ -693,6 +712,7 @@ export default function PhysicalKiosk() {
   };
 
   const returnToSessions = () => {
+    cancelQuestionSpeech();
     sessionRecorder.abandon();
     stopCamera();
     setActiveSession(null);
@@ -1034,18 +1054,32 @@ export default function PhysicalKiosk() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() =>
-                  question && speakQuestion(question.question_text)
-                }
+                onClick={replayQuestion}
+                disabled={!question || busy || isQuestionSpeaking}
                 className="border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-800 hover:text-white"
               >
-                <Volume2 className="h-4 w-4" /> Read Question
+                {isQuestionSpeaking ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Reading…
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="h-4 w-4" /> Read Question
+                  </>
+                )}
               </Button>
             </div>
 
             <h2 className="text-xl font-medium leading-8 text-white md:text-2xl">
               {question?.question_text}
             </h2>
+
+            {isQuestionSpeaking && (
+              <p className="text-sm text-indigo-300">
+                The AI examiner is reading the question. Answer controls will
+                unlock when playback finishes.
+              </p>
+            )}
 
             {feedbackMessage && (
               <p className="rounded-xl border border-indigo-400/20 bg-indigo-400/10 p-3 text-sm text-indigo-200">
@@ -1064,12 +1098,15 @@ export default function PhysicalKiosk() {
                   <span className="text-xs font-medium text-slate-300">Automatic speaker detection</span>
                   <span className={`text-xs font-semibold ${
                     faceBindingStatus === "failed" ? "text-amber-400" :
+                    isQuestionSpeaking ? "text-indigo-300" :
                     liveSpeaker.status === "speaking" ? "text-emerald-400" :
                     liveSpeaker.status === "uncertain" || liveSpeaker.status === "unavailable" ? "text-amber-400" :
                     "text-slate-400"
                   }`}>
                     {faceBindingStatus === "failed"
                       ? "Identification failed"
+                      : isQuestionSpeaking
+                        ? "Paused while AI examiner speaks"
                       : liveSpeaker.status === "speaking" && liveSpeaker.studentName
                       ? `${liveSpeaker.studentName} is speaking`
                       : liveSpeaker.status === "uncertain"
@@ -1129,7 +1166,7 @@ export default function PhysicalKiosk() {
                 id="physical-answer"
                 value={answer}
                 onChange={(event) => setAnswer(event.target.value)}
-                disabled={busy}
+                disabled={busy || isQuestionSpeaking}
                 rows={6}
                 placeholder="Speak or type your answer here..."
                 className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950 p-4 text-sm leading-6 text-slate-100 outline-none placeholder:text-slate-600 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/10 disabled:opacity-60"
@@ -1140,7 +1177,7 @@ export default function PhysicalKiosk() {
               <Button
                 variant="outline"
                 onClick={startListening}
-                disabled={busy}
+                disabled={busy || isQuestionSpeaking}
                 className={
                   isListening
                     ? "border-red-400/40 bg-red-500/15 text-red-200 hover:bg-red-500/20"
@@ -1159,7 +1196,7 @@ export default function PhysicalKiosk() {
               </Button>
               <Button
                 onClick={submitAnswer}
-                disabled={!answer.trim() || busy}
+                disabled={!answer.trim() || busy || isQuestionSpeaking}
                 className="bg-indigo-600 text-white hover:bg-indigo-500"
               >
                 {busy ? (
