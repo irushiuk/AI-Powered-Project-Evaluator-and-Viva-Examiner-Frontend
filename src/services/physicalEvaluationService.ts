@@ -235,33 +235,38 @@ export const physicalEvaluationService = {
    *
    * A physical group viva has one camera and everyone in frame at once, so
    * before lip activity can name a speaker, each face has to be tied to a
-   * student. One still frame is matched against enrolment photos server-side.
+   * student. A short camera burst is matched against enrolment photos
+   * server-side, so a blink or momentary head turn cannot ruin the binding.
    *
    * Returns which students were recognised and which have no enrolment photo
-   * (those can never be credited automatically). Never throws — attribution
-   * is decision-support and the manual dropdown remains the fallback.
+   * (those can never be credited automatically). Binding failures are
+   * surfaced so the kiosk can retry instead of waiting indefinitely.
    */
   async bindSeats(
     sessionId: string,
-    frame: Blob,
+    frames: Blob[],
   ): Promise<{
-    bindings: { student_id: string | null; confidence: number }[];
+    bindings: {
+      student_id: string | null;
+      confidence: number;
+      bbox?: number[] | null;
+      identity_confidence?: number | null;
+      votes?: number;
+      frames_processed?: number;
+    }[];
     unmatched: number;
     missing_enrollment: string[];
-  } | null> {
-    try {
-      const formData = new FormData();
-      formData.append("frame", frame, "bind.jpg");
-      const response = await kioskFetch(ATTRIBUTION_API.bind(sessionId), {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) return null;
-      const payload = await response.json().catch(() => null);
-      return payload?.data ?? null;
-    } catch {
-      return null;
-    }
+    frames_processed: number;
+  }> {
+    const formData = new FormData();
+    frames.forEach((frame, index) => {
+      formData.append("frames", frame, `bind-${index + 1}.jpg`);
+    });
+    const response = await kioskFetch(ATTRIBUTION_API.bind(sessionId), {
+      method: "POST",
+      body: formData,
+    });
+    return readJson(response, "Failed to identify the students in the room");
   },
 
   /**

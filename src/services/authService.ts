@@ -4,6 +4,23 @@ import { AUTH_API } from '@/constants/api.constant'
 // All auth requests use credentials: 'include' so the backend can read/set the
 // HttpOnly access + refresh cookies. Tokens are never returned in the body.
 
+function firstValidationError(errors: unknown): string | null {
+  if (!errors || typeof errors !== 'object') return null
+
+  for (const value of Object.values(errors as Record<string, unknown>)) {
+    if (typeof value === 'string' && value.trim()) return value
+    if (Array.isArray(value)) {
+      const message = value.find(
+        (item): item is string => typeof item === 'string' && Boolean(item.trim()),
+      )
+      if (message) return message
+    }
+    const nested = firstValidationError(value)
+    if (nested) return nested
+  }
+  return null
+}
+
 export async function login(email: string, password: string): Promise<LoginResponse> {
   const res = await fetch(AUTH_API.login, {
     method: 'POST',
@@ -13,7 +30,9 @@ export async function login(email: string, password: string): Promise<LoginRespo
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.message || 'Login failed')
+    throw new Error(
+      firstValidationError(err.errors) || err.message || 'Login failed',
+    )
   }
   const payload = await res.json()
   const data = payload.data ?? payload

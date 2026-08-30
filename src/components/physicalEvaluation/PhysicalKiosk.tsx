@@ -32,6 +32,12 @@ import type {
   PhysicalSessionList,
 } from "@/types/physicalEvaluation";
 import type { VivaQuestion } from "@/types/vivaSession";
+import {
+  useLiveSpeakerDetection,
+  type SeatBinding,
+} from "@/components/physicalEvaluation/hooks/useLiveSpeakerDetection";
+import { usePhysicalSessionRecorder } from "@/components/physicalEvaluation/hooks/usePhysicalSessionRecorder";
+import { captureBindingFrames } from "@/components/physicalEvaluation/hooks/captureBindingFrames";
 
 type KioskPhase =
   | "loading"
@@ -115,8 +121,12 @@ export default function PhysicalKiosk() {
   const [speakerId, setSpeakerId] = useState("group");
   // Face recognition status for this room, shown so the examiner knows whether
   // answers will be credited automatically or need the dropdown.
-  const [recognisedCount, setRecognisedCount] = useState<number | null>(null);
   const [missingEnrollment, setMissingEnrollment] = useState<string[]>([]);
+  const [seatBindings, setSeatBindings] = useState<SeatBinding[]>([]);
+  const [faceBindingStatus, setFaceBindingStatus] = useState<
+    "idle" | "scanning" | "ready" | "failed"
+  >("idle");
+  const [faceBindingError, setFaceBindingError] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
@@ -131,6 +141,34 @@ export default function PhysicalKiosk() {
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const bootstrappedRef = useRef(false);
+  const bindingInFlightRef = useRef<{
+    sessionId: string;
+    promise: Promise<boolean>;
+  } | null>(null);
+  const studentNames = useMemo(
+    () => Object.fromEntries(
+      activeSession?.group?.members.map((member) => [member.student_id, member.full_name]) || [],
+    ),
+    [activeSession],
+  );
+  const recognizedStudentNames = useMemo(
+    () => [...new Set(
+      seatBindings
+        .map((binding) => binding.student_id ? studentNames[binding.student_id] : null)
+        .filter((name): name is string => Boolean(name)),
+    )],
+    [seatBindings, studentNames],
+  );
+  const liveSpeaker = useLiveSpeakerDetection({
+    enabled: phase === "viva" && Boolean(activeSession?.group),
+    sessionId: activeSession?.session_id || null,
+    videoRef,
+    stream: mediaStream,
+    bindings: seatBindings,
+    names: studentNames,
+    maxFaces: activeSession?.group?.members.length || 1,
+  });
+  const sessionRecorder = usePhysicalSessionRecorder();
 
   const attachPreview = useCallback(
     (node: HTMLVideoElement | null) => {
@@ -178,7 +216,11 @@ export default function PhysicalKiosk() {
         height: { ideal: 720 },
         facingMode: "user",
       },
-      audio: false,
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
     });
     mediaStreamRef.current = stream;
     setMediaStream(stream);
@@ -210,12 +252,22 @@ export default function PhysicalKiosk() {
     async (sessionId: string) => {
       stopSpeechRecognition();
       if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-      stopCamera();
       try {
-        await physicalEvaluationService.finishSession(sessionId);
+        try {
+          await sessionRecorder.stopAndFinalize(sessionId);
+        } catch (recordingError) {
+          setError(
+            recordingError instanceof Error
+              ? `The viva was saved, but its recording could not be finalized: ${recordingError.message}`
+              : "The viva was saved, but its recording could not be finalized.",
+          );
+          await physicalEvaluationService.finishSession(sessionId);
+        }
+        stopCamera();
         await loadSessions();
         setPhase("complete");
       } catch (finalizeError) {
+        stopCamera();
         setError(
           finalizeError instanceof Error
             ? finalizeError.message
@@ -224,40 +276,72 @@ export default function PhysicalKiosk() {
         setPhase("finish_error");
       }
     },
-    [loadSessions, stopCamera, stopSpeechRecognition],
+    [loadSessions, sessionRecorder, stopCamera, stopSpeechRecognition],
   );
 
   /**
-   * Grab one frame from the camera preview and ask the backend to match each
-   * face against the group's enrolment photos.
+   * Sample a short camera burst and ask the backend to match each face against
+   * the group's enrolment photos. Multi-frame voting tolerates normal seating
+   * depth, short head turns and blinking.
    *
    * Recognition is expensive but only changes when someone moves seats, so it
    * runs here — once, at the start — rather than per frame. The result is
-   * advisory: it pre-fills who the system thinks is answering, and the
-   * examiner can always override it.
+   * advisory: uncertain answers remain available for examiner review instead
+   * of being assigned to a student by a weak match.
    */
-  const bindSeats = useCallback(async (sessionId: string) => {
-    const video = videoRef.current;
-    if (!video || !video.videoWidth) return;
+  const bindSeats = useCallback((sessionId: string): Promise<boolean> => {
+    const inFlight = bindingInFlightRef.current;
+    if (inFlight?.sessionId === sessionId) return inFlight.promise;
 
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const context = canvas.getContext("2d");
-    if (!context) return;
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const promise = (async () => {
+      setFaceBindingStatus("scanning");
+      setFaceBindingError("");
+      let video = videoRef.current;
+      for (let attempt = 0; attempt < 20 && (!video || !video.videoWidth); attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 100));
+        video = videoRef.current;
+      }
+      if (!video || !video.videoWidth) {
+        setFaceBindingStatus("failed");
+        setFaceBindingError("The camera preview was not ready. Please retry identification.");
+        return false;
+      }
 
-    const frame = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.9),
-    );
-    if (!frame) return;
+      try {
+        const frames = await captureBindingFrames(video);
+        const result = await physicalEvaluationService.bindSeats(sessionId, frames);
+        setSeatBindings(result.bindings);
+        setMissingEnrollment(result.missing_enrollment ?? []);
+        if (result.bindings.some((binding) => binding.student_id)) {
+          setFaceBindingStatus("ready");
+          return true;
+        }
+        setFaceBindingStatus("failed");
+        setFaceBindingError(
+          "No enrolled student was identified. Keep everyone visible and retry.",
+        );
+        return false;
+      } catch (bindingError) {
+        // A failed preflight must not stop the viva. Answers remain eligible for
+        // examiner attribution review instead of being assigned by a guess.
+        setSeatBindings([]);
+        setFaceBindingStatus("failed");
+        setFaceBindingError(
+          bindingError instanceof Error
+            ? bindingError.message
+            : "Student identification failed. Please retry.",
+        );
+        return false;
+      }
+    })();
 
-    const result = await physicalEvaluationService.bindSeats(sessionId, frame);
-    if (!result) return;
-
-    const recognised = result.bindings.filter((b) => b.student_id).length;
-    setRecognisedCount(recognised);
-    setMissingEnrollment(result.missing_enrollment ?? []);
+    bindingInFlightRef.current = { sessionId, promise };
+    void promise.finally(() => {
+      if (bindingInFlightRef.current?.promise === promise) {
+        bindingInFlightRef.current = null;
+      }
+    });
+    return promise;
   }, []);
 
   const beginViva = useCallback(
@@ -273,10 +357,6 @@ export default function PhysicalKiosk() {
         setFeedbackMessage(firstQuestion.message || "");
         setSpeakerId(session.student?.student_id || "group");
         setPhase("viva");
-        // Bind each face in the room to a student before questioning starts,
-        // so answers can be credited automatically. Group sessions only —
-        // an individual viva has a roster of one and nothing to tell apart.
-        if (session.group) void bindSeats(session.session_id);
         speakQuestion(firstQuestion.question_text);
       } catch (vivaError) {
         setError(
@@ -289,7 +369,7 @@ export default function PhysicalKiosk() {
         setBusy(false);
       }
     },
-    [bindSeats, speakQuestion],
+    [speakQuestion],
   );
 
   const resumeActiveRun = useCallback(
@@ -298,6 +378,14 @@ export default function PhysicalKiosk() {
       setSpeakerId(run.session.student?.student_id || "group");
       setPhase("preparing");
       await startCamera();
+      if (mediaStreamRef.current) {
+        sessionRecorder.start(run.session.session_id, mediaStreamRef.current);
+      }
+
+      // Identify the room while it is still on the preparation screen. This
+      // keeps Modal cold-start time outside question one and ensures that live
+      // speaker evidence exists before a student can answer.
+      if (run.session.group) await bindSeats(run.session.session_id);
 
       if (run.status === "demo_in_progress") {
         setPhase("demo");
@@ -319,7 +407,7 @@ export default function PhysicalKiosk() {
       }
       await beginViva(run.session);
     },
-    [beginViva, finalizeEvaluation, speakQuestion, startCamera],
+    [beginViva, bindSeats, finalizeEvaluation, sessionRecorder, speakQuestion, startCamera],
   );
 
   useEffect(() => {
@@ -396,6 +484,10 @@ export default function PhysicalKiosk() {
     setBusy(true);
     setError("");
     setActiveSession(session);
+    setSeatBindings([]);
+    setMissingEnrollment([]);
+    setFaceBindingStatus("idle");
+    setFaceBindingError("");
     setSelectedSession(null);
     setPhase("preparing");
 
@@ -407,7 +499,14 @@ export default function PhysicalKiosk() {
         session.session_id,
       );
       setActiveSession(run.session);
+      if (mediaStreamRef.current) {
+        sessionRecorder.start(run.session.session_id, mediaStreamRef.current);
+      }
       setSpeakerId(run.session.student?.student_id || "group");
+      // The run is now authorized for attribution and the camera preview is
+      // already live. Finish the one-time identity preflight before exposing
+      // the demo controls or the first viva question.
+      if (run.session.group) await bindSeats(run.session.session_id);
       if (
         run.next_action === "start_demo" ||
         run.status === "demo_in_progress"
@@ -468,11 +567,12 @@ export default function PhysicalKiosk() {
     setError("");
     setFeedbackMessage("");
     try {
+      if (activeSession.group) await liveSpeaker.flush();
       const result = await physicalEvaluationService.submitAnswer(
         activeSession.session_id,
         question.question_id,
         answer.trim(),
-        speakerId,
+        activeSession.group ? "group" : speakerId,
       );
       if (result.session_complete) {
         setFeedbackMessage(result.message || "The viva is complete.");
@@ -593,11 +693,16 @@ export default function PhysicalKiosk() {
   };
 
   const returnToSessions = () => {
+    sessionRecorder.abandon();
     stopCamera();
     setActiveSession(null);
     setQuestion(null);
     setAnswer("");
     setFeedbackMessage("");
+    setSeatBindings([]);
+    setMissingEnrollment([]);
+    setFaceBindingStatus("idle");
+    setFaceBindingError("");
     setError("");
     setPhase("list");
   };
@@ -846,11 +951,22 @@ export default function PhysicalKiosk() {
           <div className="flex min-h-72 flex-col items-center justify-center text-center">
             <Loader2 className="mb-4 h-10 w-10 animate-spin text-emerald-400" />
             <h2 className="text-xl font-semibold text-white">
-              Preparing your evaluation
+              {activeSession?.group && faceBindingStatus === "scanning"
+                ? "Identifying participants"
+                : "Preparing your evaluation"}
             </h2>
             <p className="mt-2 max-w-md text-sm leading-6 text-slate-400">
-              Keep the room camera enabled. No video is recorded or uploaded.
+              {activeSession?.group && faceBindingStatus === "scanning"
+                ? "Keep every group member visible and facing the room camera. The first question will appear when this identity check finishes."
+                : "Keep every group member visible while the room camera becomes ready."}
             </p>
+            {activeSession?.group && (
+              <p className="mt-4 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-xs font-medium text-emerald-200">
+                {faceBindingStatus === "scanning"
+                  ? "Secure face verification in progress…"
+                  : "Starting secure face verification…"}
+              </p>
+            )}
           </div>
         </EvaluationShell>
       )}
@@ -943,38 +1059,60 @@ export default function PhysicalKiosk() {
             )}
 
             {speakerOptions.length > 1 && (
-              <div>
-                <label
-                  htmlFor="physical-speaker"
-                  className="mb-1.5 block text-xs font-medium text-slate-400"
-                >
-                  Who is answering?
-                </label>
-                {recognisedCount !== null && (
-                  <p className="mb-1.5 text-xs text-slate-500">
-                    {recognisedCount > 0
-                      ? `Recognised ${recognisedCount} ${recognisedCount === 1 ? "face" : "faces"} — answers are credited automatically unless you choose someone below.`
-                      : "No faces recognised. Choose who is answering, or answers will be credited to the group."}
+              <div className="rounded-xl border border-slate-700 bg-slate-950/70 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-medium text-slate-300">Automatic speaker detection</span>
+                  <span className={`text-xs font-semibold ${
+                    faceBindingStatus === "failed" ? "text-amber-400" :
+                    liveSpeaker.status === "speaking" ? "text-emerald-400" :
+                    liveSpeaker.status === "uncertain" || liveSpeaker.status === "unavailable" ? "text-amber-400" :
+                    "text-slate-400"
+                  }`}>
+                    {faceBindingStatus === "failed"
+                      ? "Identification failed"
+                      : liveSpeaker.status === "speaking" && liveSpeaker.studentName
+                      ? `${liveSpeaker.studentName} is speaking`
+                      : liveSpeaker.status === "uncertain"
+                        ? "Speaker uncertain"
+                        : faceBindingStatus === "scanning" || liveSpeaker.status === "loading"
+                          ? "Identifying students…"
+                          : liveSpeaker.status === "unavailable"
+                            ? "Unavailable — examiner review required"
+                            : "Listening"}
+                  </span>
+                </div>
+                {liveSpeaker.status === "speaking" && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Detection confidence: {Math.round(liveSpeaker.confidence * 100)}%
                   </p>
                 )}
-                <select
-                  id="physical-speaker"
-                  value={speakerId}
-                  onChange={(event) => setSpeakerId(event.target.value)}
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100 outline-none focus:border-indigo-400"
-                >
-                  {speakerOptions.map((speaker) => (
-                    <option key={speaker.id} value={speaker.id}>
-                      {speaker.label}
-                    </option>
-                  ))}
-                </select>
+                {recognizedStudentNames.length > 0 && (
+                  <p className="mt-1 text-xs text-emerald-400">
+                    Identified: {recognizedStudentNames.join(", ")}
+                  </p>
+                )}
+                {liveSpeaker.error && <p className="mt-1 text-xs text-amber-400">{liveSpeaker.error}</p>}
+                {faceBindingError && (
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+                    <p className="text-xs text-amber-300">{faceBindingError}</p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={faceBindingStatus === "scanning" || !activeSession}
+                      onClick={() => activeSession && void bindSeats(activeSession.session_id)}
+                      className="h-7 border-amber-400/30 bg-transparent px-2 text-xs text-amber-200 hover:bg-amber-400/10 hover:text-amber-100"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" /> Retry identification
+                    </Button>
+                  </div>
+                )}
                 {missingEnrollment.length > 0 && (
                   <p className="mt-1 text-xs text-amber-400">
                     {missingEnrollment.length}{" "}
                     {missingEnrollment.length === 1 ? "student has" : "students have"}{" "}
-                    no enrolment photo and cannot be recognised. Pick them here
-                    when they answer.
+                    no enrolment photo and cannot be recognised automatically.
+                    Their answers will be held for examiner review.
                   </p>
                 )}
               </div>

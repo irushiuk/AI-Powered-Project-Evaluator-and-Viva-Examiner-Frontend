@@ -77,6 +77,17 @@ export interface SeatBinding {
   bbox?: number[] | null
   method?: string
   confidence: number
+  identity_confidence?: number | null
+  votes?: number
+  frames_processed?: number
+}
+
+export interface SpeakerDetectionTestResult {
+  bindings: Array<SeatBinding & { student_name: string; email: string | null }>
+  accounts: Array<{ student_id: string; student_name: string; email: string; has_photo: boolean }>
+  missing_accounts: string[]
+  missing_photos: string[]
+  frames_processed: number
 }
 
 async function readJson<T>(res: Response, fallback: string): Promise<T> {
@@ -92,6 +103,14 @@ async function readJson<T>(res: Response, fallback: string): Promise<T> {
 }
 
 export const attributionService = {
+  async testSpeakerBinding(frames: Blob[]): Promise<SpeakerDetectionTestResult> {
+    const body = new FormData()
+    frames.forEach((frame, index) => {
+      body.append('frames', frame, `speaker-test-${index + 1}.jpg`)
+    })
+    const res = await apiFetch(ATTRIBUTION_API.speakerDetectionTest, { method: 'POST', body })
+    return readJson(res, 'Failed to test face binding')
+  },
   /** Post a batch of speaker evidence. Never throws — returns 0 on failure. */
   async sendEvidence(
     sessionId: string,

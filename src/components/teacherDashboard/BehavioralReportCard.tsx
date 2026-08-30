@@ -60,12 +60,13 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
     void load()
   }, [load])
 
-  // Poll while the analysis is running.
+  // Poll while recording finalization is creating the report, and while the
+  // analysis itself is pending/running.
   useEffect(() => {
-    if (summary?.status !== 'processing' && summary?.status !== 'pending') return
+    if (!notFound && summary?.status !== 'processing' && summary?.status !== 'pending') return
     const id = window.setInterval(() => void load(), 5000)
     return () => window.clearInterval(id)
-  }, [summary?.status, load])
+  }, [notFound, summary?.status, load])
 
   async function handleTrigger() {
     setTriggering(true)
@@ -175,18 +176,9 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
             </button>
           </div>
         ) : notFound ? (
-          <div className="text-sm text-gray-500 space-y-3">
-            <p>
-              No behavioral analysis exists for this session yet. It is
-              generated from the session recording after the viva ends.
-            </p>
-            <button
-              onClick={handleTrigger}
-              disabled={triggering}
-              className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-50"
-            >
-              {triggering ? 'Queueing…' : 'Run analysis'}
-            </button>
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Preparing the session recording for behavioral analysis…
           </div>
         ) : summary?.status === 'processing' || summary?.status === 'pending' ? (
           <div className="flex items-center gap-2 text-sm text-gray-500">
