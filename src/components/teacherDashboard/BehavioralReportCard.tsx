@@ -1,16 +1,16 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Eye,
   EyeOff,
   Loader2,
-  MessageSquareText,
   Play,
   RefreshCw,
   UserX,
   Users,
+  Volume2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -36,17 +36,21 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
   const [summary, setSummary] = useState<CvSummaryResponse | null>(null)
   const [notFound, setNotFound] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [triggering, setTriggering] = useState(false)
   const [activeQuestion, setActiveQuestion] = useState<CvQuestionMarker | null>(null)
+  const [selectedMoment, setSelectedMoment] = useState<string | null>(null)
+  const [videoDurationMs, setVideoDurationMs] = useState(0)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const load = useCallback(async () => {
     try {
+      setLoadError(null)
       const data = await cvAnalysisService.getSummary(sessionId)
       setSummary(data)
       setNotFound(data === null)
     } catch (err) {
-      console.warn('Behavioral report load failed:', err)
+      setLoadError(err instanceof Error ? err.message : 'Failed to load behavioral report')
     } finally {
       setLoading(false)
     }
@@ -76,10 +80,10 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
     }
   }
 
-  function seekTo(tMs: number) {
+  function seekTo(tMs: number, leadInMs = 0) {
     const video = videoRef.current
     if (!video) return
-    video.currentTime = tMs / 1000
+    video.currentTime = Math.max(0, tMs - leadInMs) / 1000
     void video.play().catch(() => {})
     video.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
@@ -89,15 +93,33 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
   // "Moments to review" says who, not just when.
   const nameFor = (studentId?: string | null) =>
     artifact?.per_student.find((s) => s.student_id === studentId)?.display_name ?? null
-  const allFlags: CvIntegrityFlag[] = artifact
-    ? [
-        ...artifact.session_flags,
-        ...artifact.per_student.flatMap((s) => s.integrity_flags),
-      ].sort((a, b) => a.t_ms - b.t_ms)
-    : []
-  const questions: CvQuestionMarker[] = [...(summary?.question_timeline ?? [])].sort(
-    (a, b) => a.offset_ms - b.offset_ms,
+  const allFlags: CvIntegrityFlag[] = useMemo(
+    () =>
+      artifact
+        ? [
+            ...artifact.session_flags,
+            ...artifact.per_student.flatMap((student) => student.integrity_flags),
+          ].sort((a, b) => a.t_ms - b.t_ms)
+        : [],
+    [artifact],
   )
+  const questions: CvQuestionMarker[] = useMemo(
+    () =>
+      [...(summary?.question_timeline ?? [])].sort(
+        (a, b) => a.offset_ms - b.offset_ms,
+      ),
+    [summary?.question_timeline],
+  )
+  const inferredDurationMs = useMemo(() => {
+    const lastFlag = Math.max(0, ...allFlags.map((flag) => flag.t_ms + 5000))
+    const lastQuestion = Math.max(0, ...questions.map((question) => question.offset_ms + 10000))
+    const lastSpeech = Math.max(
+      0,
+      ...(artifact?.timeline.map((event) => event.t_end_ms) ?? []),
+    )
+    return Math.max(1000, lastFlag, lastQuestion, lastSpeech)
+  }, [allFlags, artifact?.timeline, questions])
+  const timelineDurationMs = videoDurationMs || inferredDurationMs
 
   // The question on screen at the current playhead = the last one asked at or
   // before it.
@@ -116,15 +138,15 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+    <section className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
       <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Eye className="w-4 h-4 text-blue-600" />
           <h3 className="text-sm font-semibold text-gray-900">
-            Behavioral Report
+            Behavioral Review
           </h3>
-          <span className="text-[11px] text-gray-400 font-medium uppercase tracking-wide">
-            advisory — not part of scoring
+          <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-blue-700">
+            Advisory only
           </span>
         </div>
         {summary?.status === 'completed' && (
@@ -132,17 +154,25 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
             onClick={handleTrigger}
             disabled={triggering}
             className="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1"
-            title="Re-run analysis"
+            title="Run the analysis again"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${triggering ? 'animate-spin' : ''}`} />
+            Re-run analysis
           </button>
         )}
       </div>
 
-      <div className="p-5 space-y-4">
+      <div className="flex flex-col gap-6 p-5 sm:p-6">
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <Loader2 className="w-4 h-4 animate-spin" /> Loading report…
+          </div>
+        ) : loadError ? (
+          <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+            <p>{loadError}</p>
+            <button onClick={() => void load()} className="mt-3 font-semibold hover:underline">
+              Try again
+            </button>
           </div>
         ) : notFound ? (
           <div className="text-sm text-gray-500 space-y-3">
@@ -183,26 +213,37 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
           </div>
         ) : artifact ? (
           <>
+            <div className="order-0 flex gap-3 rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+              <Eye className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+              <p className="text-xs leading-relaxed text-blue-800">
+                These signals identify moments worth reviewing. They do not prove
+                misconduct and never change a student&apos;s score automatically.
+              </p>
+            </div>
             {/* Per-student summary */}
-            <div className="overflow-x-auto">
+            <div className="order-4 overflow-x-auto rounded-xl border border-gray-200 p-4 sm:p-5">
+              <SectionTitle
+                title="Full behavioral results"
+                subtitle="A session-level summary for each participant."
+              />
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs text-gray-400 uppercase tracking-wide">
-                    <th className="pb-2 font-medium">Student</th>
-                    <th className="pb-2 font-medium">Speaking</th>
-                    <th className="pb-2 font-medium">Turns</th>
-                    <th className="pb-2 font-medium">Attention</th>
-                    <th className="pb-2 font-medium">Look-aways</th>
-                    <th className="pb-2 font-medium">Flags</th>
+                  <tr className="text-left text-xs text-gray-400 uppercase tracking-wide border-b border-gray-100">
+                    <th className="pb-3 pt-4 font-medium">Student</th>
+                    <th className="pb-3 pt-4 font-medium">Speaking</th>
+                    <th className="pb-3 pt-4 font-medium">Turns</th>
+                    <th className="pb-3 pt-4 font-medium">Attention</th>
+                    <th className="pb-3 pt-4 font-medium">Look-aways</th>
+                    <th className="pb-3 pt-4 font-medium">Flags</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {artifact.per_student.map((s) => (
                     <tr key={s.student_id}>
-                      <td className="py-2 font-medium text-gray-900">
+                      <td className="py-3 font-medium text-gray-900">
                         {s.display_name}
                       </td>
-                      <td className="py-2 text-gray-600">
+                      <td className="py-3 text-gray-600">
                         {formatMs(s.speaking_time_ms)}
                         {artifact.mode === 'group' && (
                           <span className="text-gray-400">
@@ -210,8 +251,8 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
                           </span>
                         )}
                       </td>
-                      <td className="py-2 text-gray-600">{s.turn_count}</td>
-                      <td className="py-2">
+                      <td className="py-3 text-gray-600">{s.turn_count}</td>
+                      <td className="py-3">
                         {s.attention_pct == null ? (
                           <span className="text-gray-400">—</span>
                         ) : (
@@ -220,7 +261,7 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
                           </span>
                         )}
                       </td>
-                      <td className="py-2 text-gray-600">
+                      <td className="py-3 text-gray-600">
                         {s.off_screen_glance_count ? (
                           <>
                             {s.off_screen_glance_count}
@@ -232,7 +273,7 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
                           <span className="text-gray-400">—</span>
                         )}
                       </td>
-                      <td className="py-2 text-gray-600">
+                      <td className="py-3 text-gray-600">
                         {s.integrity_flags.length || '—'}
                       </td>
                     </tr>
@@ -250,17 +291,24 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
 
             {/* Integrity flags — timecoded evidence for human review */}
             {allFlags.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                  Moments to review ({allFlags.length})
-                </p>
+              <div className="order-2 space-y-3 rounded-xl border border-gray-200 p-4 sm:p-5">
+                <SectionTitle
+                  title={`Moments to review (${allFlags.length})`}
+                  subtitle="Playback begins two seconds before each detected moment."
+                />
                 {allFlags.map((flag, i) => (
                   <button
                     key={i}
-                    onClick={() => seekTo(flag.t_ms)}
+                    onClick={() => {
+                      setSelectedMoment(`${flag.kind}-${flag.t_ms}-${i}`)
+                      seekTo(flag.t_ms, 2000)
+                    }}
                     disabled={!summary?.playback_url}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-left disabled:cursor-default"
+                    className={`w-full flex items-center gap-2 px-3 py-3 rounded-lg border text-left disabled:cursor-default transition ${
+                      selectedMoment === `${flag.kind}-${flag.t_ms}-${i}`
+                        ? 'border-amber-300 bg-amber-100 ring-2 ring-amber-100'
+                        : 'border-amber-100 bg-amber-50 hover:bg-amber-100'
+                    }`}
                   >
                     {flagIcon(flag.kind)}
                     <span className="flex-1 text-xs text-gray-700">
@@ -278,72 +326,130 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
                 ))}
               </div>
             )}
+            {allFlags.length === 0 && (
+              <div className="order-2 rounded-xl border border-emerald-100 bg-emerald-50 p-4 sm:p-5">
+                <SectionTitle
+                  title="Moments to review (0)"
+                  subtitle="No unusual moments were flagged in this recording."
+                />
+              </div>
+            )}
 
             {/* Session recording player. The caption stands in for the AI
                 examiner's voice, which is spoken by the student's browser and
                 so never reaches the recording. */}
             {summary?.playback_url ? (
-              <div className="relative">
-                <video
-                  ref={videoRef}
-                  src={summary.playback_url}
-                  controls
-                  preload="metadata"
-                  onTimeUpdate={handleTimeUpdate}
-                  className="w-full rounded-xl border border-gray-200 bg-black"
+              <div className="order-1 mx-auto w-full max-w-3xl space-y-3">
+                <SectionTitle
+                  title="Session recording"
+                  subtitle="Select a timeline marker or review moment to jump through the recording."
                 />
-                {activeQuestion && (
-                  <div className="pointer-events-none absolute inset-x-0 bottom-12 px-3">
-                    <p className="mx-auto max-w-2xl rounded-lg bg-black/75 px-3 py-1.5 text-center text-xs leading-snug text-white">
-                      <span className="font-semibold text-blue-300">
-                        Q{activeQuestion.order}:{' '}
-                      </span>
-                      {activeQuestion.question_text}
-                    </p>
+                <div className="relative overflow-hidden rounded-xl border border-gray-200 bg-black">
+                  <video
+                    ref={videoRef}
+                    src={summary.playback_url}
+                    controls
+                    preload="metadata"
+                    onLoadedMetadata={(event) => setVideoDurationMs(event.currentTarget.duration * 1000)}
+                    onTimeUpdate={handleTimeUpdate}
+                    className="aspect-video w-full bg-black"
+                  />
+                  {activeQuestion && (
+                    <div className="pointer-events-none absolute inset-x-0 bottom-12 px-3">
+                      <p className="mx-auto max-w-2xl rounded-lg bg-black/75 px-3 py-1.5 text-center text-xs leading-snug text-white">
+                        <span className="font-semibold text-blue-300">
+                          Q{activeQuestion.order}:{' '}
+                        </span>
+                        {activeQuestion.question_text}
+                      </p>
+                    </div>
+                  )}
                   </div>
-                )}
               </div>
             ) : (
-              <p className="text-xs text-gray-400">
+              <p className="order-1 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-400">
                 Recording playback unavailable.
               </p>
             )}
 
-            {/* Question chapters */}
-            {questions.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-                  <MessageSquareText className="w-3.5 h-3.5 text-blue-500" />
-                  Questions asked ({questions.length})
-                </p>
-                {questions.map((q) => (
-                  <button
-                    key={q.question_id}
-                    onClick={() => seekTo(q.offset_ms)}
+            <div className="order-3 rounded-xl border border-gray-200 p-4 sm:p-5">
+              <div className="mb-5 flex flex-wrap items-end justify-between gap-2">
+                <SectionTitle
+                  title="Session timeline"
+                  subtitle="Questions, behavioral flags, and attributed speaking activity."
+                />
+                <span className="font-mono text-xs text-gray-400">
+                  {formatMs(timelineDurationMs)} total
+                </span>
+              </div>
+
+              <div className="relative h-12 rounded-xl bg-gray-100">
+                <div className="absolute inset-y-0 left-1/4 w-px bg-white" />
+                <div className="absolute inset-y-0 left-1/2 w-px bg-white" />
+                <div className="absolute inset-y-0 left-3/4 w-px bg-white" />
+
+                {artifact.timeline.map((event, index) => {
+                  const start = markerPosition(event.t_start_ms, timelineDurationMs)
+                  const end = markerPosition(event.t_end_ms, timelineDurationMs)
+                  const studentName = nameFor(event.student_id) ?? 'Student'
+                  return (
+                    <button
+                      key={`${event.student_id}-${event.t_start_ms}-${index}`}
+                      type="button"
+                      title={`${studentName} speaking, ${formatMs(event.t_start_ms)}–${formatMs(event.t_end_ms)}`}
+                      aria-label={`${studentName} speaking at ${formatMs(event.t_start_ms)}`}
+                      onClick={() => seekTo(event.t_start_ms)}
+                      disabled={!summary?.playback_url}
+                      className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-emerald-500 transition hover:bg-emerald-600 disabled:cursor-default"
+                      style={{ left: `${start}%`, width: `${Math.max(0.7, end - start)}%` }}
+                    />
+                  )
+                })}
+
+                {questions.map((question) => (
+                  <TimelinePoint
+                    key={question.question_id}
+                    position={markerPosition(question.offset_ms, timelineDurationMs)}
+                    color="bg-blue-500"
+                    label={`Q${question.order} at ${formatMs(question.offset_ms)}`}
+                    onClick={() => seekTo(question.offset_ms)}
                     disabled={!summary?.playback_url}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left disabled:cursor-default ${
-                      activeQuestion?.question_id === q.question_id
-                        ? 'bg-blue-100'
-                        : 'bg-blue-50 hover:bg-blue-100'
-                    }`}
-                  >
-                    <span className="text-[11px] font-semibold text-blue-700 shrink-0">
-                      Q{q.order}
-                    </span>
-                    <span className="flex-1 text-xs text-gray-700 line-clamp-2">
-                      {q.question_text}
-                    </span>
-                    <span className="text-xs font-mono text-blue-700 flex items-center gap-1 shrink-0">
-                      <Play className="w-3 h-3" /> {formatMs(q.offset_ms)}
-                    </span>
-                  </button>
+                  />
+                ))}
+
+                {allFlags.map((flag, index) => (
+                  <TimelinePoint
+                    key={`${flag.kind}-${flag.t_ms}-${index}`}
+                    position={markerPosition(flag.t_ms, timelineDurationMs)}
+                    color={flag.kind === 'gaze_off_screen' ? 'bg-amber-500' : 'bg-red-500'}
+                    label={`${flagLabel(flag.kind)} at ${flag.video_timecode}`}
+                    onClick={() => seekTo(flag.t_ms, 2000)}
+                    disabled={!summary?.playback_url}
+                    emphasized
+                  />
                 ))}
               </div>
-            )}
+
+              <div className="mt-2 flex justify-between font-mono text-[10px] text-gray-400">
+                <span>0:00</span>
+                <span>{formatMs(timelineDurationMs * 0.25)}</span>
+                <span>{formatMs(timelineDurationMs * 0.5)}</span>
+                <span>{formatMs(timelineDurationMs * 0.75)}</span>
+                <span>{formatMs(timelineDurationMs)}</span>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-gray-500">
+                <Legend color="bg-blue-500" label="Question" />
+                <Legend color="bg-amber-500" label="Look-away" />
+                <Legend color="bg-red-500" label="Other review flag" />
+                <Legend color="bg-emerald-500" label="Speaking" />
+              </div>
+            </div>
+
           </>
         ) : null}
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -358,9 +464,68 @@ function attentionColor(pct: number): string {
   return 'text-red-600 font-medium'
 }
 
+function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div>
+      <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+      <p className="mt-0.5 text-xs text-gray-400">{subtitle}</p>
+    </div>
+  )
+}
+
+function TimelinePoint({
+  position,
+  color,
+  label,
+  onClick,
+  disabled,
+  emphasized = false,
+}: {
+  position: number
+  color: string
+  label: string
+  onClick: () => void
+  disabled: boolean
+  emphasized?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      className={`absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full ${color} shadow-sm transition disabled:cursor-default ${
+        emphasized ? 'h-8 w-3 ring-2 ring-white hover:h-9' : 'h-5 w-2 hover:h-6 hover:w-2.5'
+      }`}
+      style={{ left: `${position}%` }}
+    />
+  )
+}
+
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className={`h-2.5 w-2.5 rounded-full ${color}`} /> {label}
+    </span>
+  )
+}
+
+function markerPosition(tMs: number, durationMs: number): number {
+  return Math.min(99, Math.max(1, (tMs / durationMs) * 100))
+}
+
+function flagLabel(kind: CvIntegrityFlag['kind']): string {
+  if (kind === 'student_absent') return 'Student not visible'
+  if (kind === 'extra_person') return 'Additional person visible'
+  if (kind === 'gaze_off_screen') return 'Sustained look-away'
+  return 'Unknown person visible'
+}
+
 function flagIcon(kind: CvIntegrityFlag['kind']) {
   if (kind === 'student_absent') return <UserX className="w-3.5 h-3.5 text-amber-600 shrink-0" />
   if (kind === 'extra_person') return <Users className="w-3.5 h-3.5 text-amber-600 shrink-0" />
   if (kind === 'gaze_off_screen') return <EyeOff className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-  return <MessageSquareText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+  if (kind === 'unknown_face') return <UserX className="w-3.5 h-3.5 text-red-600 shrink-0" />
+  return <Volume2 className="w-3.5 h-3.5 text-amber-600 shrink-0" />
 }

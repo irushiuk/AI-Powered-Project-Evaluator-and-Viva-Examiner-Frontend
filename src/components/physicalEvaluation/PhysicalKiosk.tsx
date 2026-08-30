@@ -113,6 +113,10 @@ export default function PhysicalKiosk() {
   const [question, setQuestion] = useState<VivaQuestion | null>(null);
   const [answer, setAnswer] = useState("");
   const [speakerId, setSpeakerId] = useState("group");
+  // Face recognition status for this room, shown so the examiner knows whether
+  // answers will be credited automatically or need the dropdown.
+  const [recognisedCount, setRecognisedCount] = useState<number | null>(null);
+  const [missingEnrollment, setMissingEnrollment] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
@@ -223,6 +227,39 @@ export default function PhysicalKiosk() {
     [loadSessions, stopCamera, stopSpeechRecognition],
   );
 
+  /**
+   * Grab one frame from the camera preview and ask the backend to match each
+   * face against the group's enrolment photos.
+   *
+   * Recognition is expensive but only changes when someone moves seats, so it
+   * runs here — once, at the start — rather than per frame. The result is
+   * advisory: it pre-fills who the system thinks is answering, and the
+   * examiner can always override it.
+   */
+  const bindSeats = useCallback(async (sessionId: string) => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const frame = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.9),
+    );
+    if (!frame) return;
+
+    const result = await physicalEvaluationService.bindSeats(sessionId, frame);
+    if (!result) return;
+
+    const recognised = result.bindings.filter((b) => b.student_id).length;
+    setRecognisedCount(recognised);
+    setMissingEnrollment(result.missing_enrollment ?? []);
+  }, []);
+
   const beginViva = useCallback(
     async (session: PhysicalSession) => {
       setBusy(true);
@@ -236,6 +273,10 @@ export default function PhysicalKiosk() {
         setFeedbackMessage(firstQuestion.message || "");
         setSpeakerId(session.student?.student_id || "group");
         setPhase("viva");
+        // Bind each face in the room to a student before questioning starts,
+        // so answers can be credited automatically. Group sessions only —
+        // an individual viva has a roster of one and nothing to tell apart.
+        if (session.group) void bindSeats(session.session_id);
         speakQuestion(firstQuestion.question_text);
       } catch (vivaError) {
         setError(
@@ -248,7 +289,7 @@ export default function PhysicalKiosk() {
         setBusy(false);
       }
     },
-    [speakQuestion],
+    [bindSeats, speakQuestion],
   );
 
   const resumeActiveRun = useCallback(
@@ -909,6 +950,13 @@ export default function PhysicalKiosk() {
                 >
                   Who is answering?
                 </label>
+                {recognisedCount !== null && (
+                  <p className="mb-1.5 text-xs text-slate-500">
+                    {recognisedCount > 0
+                      ? `Recognised ${recognisedCount} ${recognisedCount === 1 ? "face" : "faces"} — answers are credited automatically unless you choose someone below.`
+                      : "No faces recognised. Choose who is answering, or answers will be credited to the group."}
+                  </p>
+                )}
                 <select
                   id="physical-speaker"
                   value={speakerId}
@@ -921,10 +969,14 @@ export default function PhysicalKiosk() {
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-slate-500">
-                  Automatic face/voice member identification can replace this
-                  manual choice later.
-                </p>
+                {missingEnrollment.length > 0 && (
+                  <p className="mt-1 text-xs text-amber-400">
+                    {missingEnrollment.length}{" "}
+                    {missingEnrollment.length === 1 ? "student has" : "students have"}{" "}
+                    no enrolment photo and cannot be recognised. Pick them here
+                    when they answer.
+                  </p>
+                )}
               </div>
             )}
 
