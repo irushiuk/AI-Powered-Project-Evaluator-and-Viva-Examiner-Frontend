@@ -8,6 +8,7 @@ import {
   ChevronUp,
   GraduationCap,
   LogOut,
+  ScanFace,
   Settings,
   User,
   MoreVertical,
@@ -17,11 +18,18 @@ import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { useAuthContext } from '@/context/AuthContext'
+import { useFaceRegistration } from '@/hooks/useFaceRegistration'
 
 export function DashboardNavbar() {
   const [profileOpen, setProfileOpen] = useState(false)
   const pathname = usePathname()
   const { logout, user } = useAuthContext()
+
+  // Students can't be identified in a viva recording without a reference
+  // photo, so an outstanding registration is surfaced as a notification.
+  const face = useFaceRegistration()
+  const needsFaceRegistration =
+    face.isStudent && !face.loading && !face.error && !face.registered
 
   const showStudentNavLinks = pathname.startsWith('/dashboard/student')
   const showTeacherNavLinks = pathname.startsWith('/dashboard/teacher')
@@ -102,7 +110,9 @@ export function DashboardNavbar() {
                   aria-label="Open notifications"
                 >
                   <Bell className="h-7 w-7" />
-                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive" />
+                  {needsFaceRegistration && (
+                    <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive" />
+                  )}
                 </Button>
               </DropdownMenu.Trigger>
               <DropdownMenu.Portal>
@@ -112,9 +122,29 @@ export function DashboardNavbar() {
                 >
                   <div className="px-2 py-1.5 text-sm font-semibold">Notifications</div>
                   <DropdownMenu.Separator className="my-1 h-px bg-border" />
-                  <div className="px-2 py-4 text-center text-sm text-gray-500">
-                    No New Notifications
-                  </div>
+                  {needsFaceRegistration ? (
+                    <DropdownMenu.Item asChild>
+                      <Link
+                        href="/dashboard/profile"
+                        className="flex cursor-pointer items-start gap-2.5 rounded-sm px-2 py-2.5 outline-none transition hover:bg-gray-100 focus:bg-gray-100"
+                      >
+                        <ScanFace className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                        <span className="space-y-0.5">
+                          <span className="block text-sm font-medium">
+                            Register your face
+                          </span>
+                          <span className="block text-xs text-gray-500">
+                            Upload or capture your photo — you can&apos;t join a
+                            viva session until you do.
+                          </span>
+                        </span>
+                      </Link>
+                    </DropdownMenu.Item>
+                  ) : (
+                    <div className="px-2 py-4 text-center text-sm text-gray-500">
+                      No New Notifications
+                    </div>
+                  )}
                 </DropdownMenu.Content>
               </DropdownMenu.Portal>
             </DropdownMenu.Root>
@@ -137,8 +167,11 @@ export function DashboardNavbar() {
                   className="gap-2 rounded-full bg-transparent pr-2 text-gray-700 shadow-none hover:bg-gray-100 hover:text-gray-900 focus-visible:bg-gray-100"
                   aria-label="Open profile menu"
                 >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground">
                     <User className="h-4 w-4" />
+                    {needsFaceRegistration && (
+                      <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-amber-500" />
+                    )}
                   </span>
                   {profileOpen ? (
                     <ChevronUp className="h-4 w-4" />
@@ -161,6 +194,20 @@ export function DashboardNavbar() {
                       Profile Settings
                     </Link>
                   </DropdownMenu.Item>
+                  {face.isStudent && (
+                    <DropdownMenu.Item asChild>
+                      <Link
+                        href="/dashboard/profile"
+                        className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none transition hover:bg-gray-100 focus:bg-gray-100"
+                      >
+                        <ScanFace className="h-4 w-4" />
+                        Face Registration
+                        {needsFaceRegistration && (
+                          <span className="ml-auto h-2 w-2 rounded-full bg-amber-500" />
+                        )}
+                      </Link>
+                    </DropdownMenu.Item>
+                  )}
                   <DropdownMenu.Separator className="my-1 h-px bg-border" />
                   <DropdownMenu.Item
                     className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm text-destructive outline-none transition hover:bg-gray-100 focus:bg-gray-100"

@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { facePhotoService, type FacePhotoState } from '@/services/facePhotoService'
+import { publishFaceRegistration } from '@/hooks/useFaceRegistration'
 import FaceEnrollmentWizard from './FaceEnrollmentWizard'
 
 const EMPTY_STATE: FacePhotoState = {
@@ -25,6 +26,7 @@ export default function FaceEnrollmentRegistrationCard() {
   useEffect(() => {
     let cancelled = false
     facePhotoService.get().then((value) => {
+      publishFaceRegistration(value)
       if (cancelled) return
       setState({
         ...EMPTY_STATE,
@@ -42,6 +44,9 @@ export default function FaceEnrollmentRegistrationCard() {
   function completed(value: FacePhotoState) {
     setState(value)
     setWizardOpen(false)
+    // Clears the "register your face" notification and unlocks the join
+    // buttons without waiting for a reload.
+    publishFaceRegistration(value)
     toast.success(`Face registration complete with ${value.sample_count} verified samples.`)
   }
 

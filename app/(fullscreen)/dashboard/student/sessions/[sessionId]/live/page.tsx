@@ -1,4 +1,5 @@
 import { LiveVivaRoom } from '@/components/studentDashboard/liveViva'
+import { LiveSessionFaceGuard } from '@/components/studentDashboard/LiveSessionFaceGuard'
 
 export default async function LiveSessionPage({
   params,
@@ -9,7 +10,9 @@ export default async function LiveSessionPage({
 
   return (
     <div className="h-full w-full">
-      <LiveVivaRoom sessionId={resolvedParams.sessionId} />
+      <LiveSessionFaceGuard>
+        <LiveVivaRoom sessionId={resolvedParams.sessionId} />
+      </LiveSessionFaceGuard>
     </div>
   )
 }

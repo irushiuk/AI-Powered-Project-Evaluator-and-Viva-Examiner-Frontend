@@ -1,9 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { Play } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { JoinSessionGate } from './JoinSessionGate'
 
 type SessionCountdownGateProps = {
   sessionId: string
@@ -64,12 +62,7 @@ export function SessionCountdownGate({ sessionId, startsAt, serverTime }: Sessio
       <p className="text-sm text-muted-foreground animate-pulse text-green-500 font-medium">
         Your scheduled time has arrived. Join the room to start your demo or viva.
       </p>
-      <Link href={`/dashboard/student/sessions/${sessionId}/live`} className="block w-full">
-        <Button className="w-full bg-blue-600 hover:bg-blue-700 font-semibold" size="lg">
-          Join Session
-          <Play className="ml-2 h-4 w-4" />
-        </Button>
-      </Link>
+      <JoinSessionGate sessionId={sessionId} label="Join Session" />
     </div>
   )
 }

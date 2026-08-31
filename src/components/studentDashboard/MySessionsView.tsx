@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import FaceEnrollmentCard from '@/components/studentDashboard/FaceEnrollmentRegistrationCard'
 import { Pagination } from '@/components/ui/pagination'
 import { formatColomboDate, formatColomboFullDate, formatColomboTime } from '@/utils/datetime'
 import type { NextSession, SessionStatusFilter, StudentSessionSummary } from '@/types/session'
@@ -185,8 +184,6 @@ export function MySessionsView({ nextSession, allSessionsData, initialTab }: MyS
           Your current project evaluation sessions and viva status.
         </p>
       </div>
-
-      <FaceEnrollmentCard />
 
       {nextSession && nextStart && (
         <Link href={`/dashboard/student/sessions/${nextSession.session_id}?projectId=${nextSession.project_id}`}>

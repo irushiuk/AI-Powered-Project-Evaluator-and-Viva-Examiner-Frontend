@@ -1,10 +1,8 @@
 import { Play, AlertCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { JoinSessionGate } from './JoinSessionGate'
 import { RubricCard } from './RubricCard'
 import type { RubricCategory } from './sessionTypes'
-
-import Link from 'next/link'
 
 type SessionOngoingViewProps = {
   sessionId: string
@@ -23,12 +21,11 @@ export function SessionOngoingView({ sessionId, rubrics }: SessionOngoingViewPro
           <CardDescription>Join the session when you are ready</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <Link href={`/dashboard/student/sessions/${sessionId}/live`} className="w-full block">
-            <Button className="w-full" size="lg">
-              Join Viva Session
-              <Play className="ml-2 h-4 w-4" />
-            </Button>
-          </Link>
+          <JoinSessionGate
+            sessionId={sessionId}
+            label="Join Viva Session"
+            className="w-full"
+          />
           <p className="text-center text-xs text-muted-foreground">
             You&apos;ll be connected to the live evaluation room
           </p>
