@@ -13,6 +13,7 @@ import {
   Volume2,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import PhysiologySection from '@/components/teacherDashboard/PhysiologySection'
 import {
   cvAnalysisService,
   type CvIntegrityFlag,
@@ -441,6 +442,15 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
           </>
         ) : null}
       </div>
+
+      {/* Physiological arousal from the exam-station band. Renders nothing
+          unless this session was run with one, and shares the player above so
+          a raised-arousal moment seeks the recording like any other flag. */}
+      <PhysiologySection
+        sessionId={sessionId}
+        onSeek={seekTo}
+        canSeek={Boolean(summary?.playback_url)}
+      />
     </section>
   )
 }
