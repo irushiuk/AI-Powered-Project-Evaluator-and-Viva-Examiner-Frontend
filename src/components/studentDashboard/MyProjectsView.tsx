@@ -184,7 +184,7 @@ export function MyProjectsView({ initialData, currentPage }: MyProjectsViewProps
 
                   {project.session_details && (
                     <Link
-                      href={`/dashboard/student/sessions/${project.session_details.session_id}`}
+                      href={`/dashboard/student/sessions/${project.session_details.session_id}?projectId=${project.id}`}
                     >
                       <Button
                         className="w-full cursor-pointer"

@@ -8,6 +8,8 @@ import {
   User,
   Users,
   UserCircle,
+  ArrowRight,
+  CheckCircle2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -88,6 +90,11 @@ export function ExploreProjectsView({
   const [searchVal, setSearchVal] = useState(initialSearch)
   const [filterVal, setFilterVal] = useState<ProjectFilter>(initialFilter)
 
+  // Projects enrolled during this visit. The API drops them from the
+  // available list on the next fetch, but until then the card stays on
+  // screen as a shortcut into "My Projects".
+  const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set())
+
   const [pendingProject, setPendingProject] =
     useState<AvailableProject | null>(null)
   const [groupNumber, setGroupNumber] = useState('')
@@ -166,15 +173,12 @@ export function ExploreProjectsView({
         return
       }
 
-      toast.success('Successfully enrolled in project!')
-      
-      // Remove the enrolled project from the explore list
-      setProjects((current) =>
-        current.filter((p) => p.id !== pendingProject.id),
-      )
-      // Decrease total count locally
-      setTotalCount((c) => Math.max(0, c - 1))
-      
+      toast.success('Enrolled! Open the project card to go to My Projects.')
+
+      // Keep the card in place and flip it into an "enrolled" state so the
+      // student can click straight through to it under My Projects.
+      setEnrolledIds((current) => new Set(current).add(pendingProject.id))
+
       setPendingProject(null)
       setGroupNumber('')
       setMemberEmails([''])
@@ -228,63 +232,105 @@ export function ExploreProjectsView({
       ) : (
         <div className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {projects.map((project) => (
-              <Card
-                key={project.id}
-                className="flex h-full flex-col border-border/70 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-              >
-                <CardHeader className="space-y-3 pb-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <CardTitle className="text-lg leading-snug">
-                        {project.project_name}
-                      </CardTitle>
-                      <CardDescription>
-                        {project.description ?? 'No description provided.'}
-                      </CardDescription>
-                    </div>
-                    <Badge variant="secondary">
-                      {project.is_group_project ? 'Group' : 'Individual'}
-                    </Badge>
-                  </div>
-                </CardHeader>
+            {projects.map((project) => {
+              const isEnrolled = enrolledIds.has(project.id)
+              const goToMyProject = () =>
+                router.push(`/dashboard/student/projects/${project.id}`)
 
-                <CardContent className="flex flex-1 flex-col justify-between gap-5">
-                  <div className="space-y-3 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      <span>{project.lead_examiner_name ?? 'TBA'}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {project.is_group_project ? (
-                        <Users className="h-4 w-4" />
+              return (
+                <Card
+                  key={project.id}
+                  onClick={isEnrolled ? goToMyProject : undefined}
+                  role={isEnrolled ? 'link' : undefined}
+                  tabIndex={isEnrolled ? 0 : undefined}
+                  onKeyDown={
+                    isEnrolled
+                      ? (e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            goToMyProject()
+                          }
+                        }
+                      : undefined
+                  }
+                  className={`flex h-full flex-col border-border/70 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                    isEnrolled ? 'cursor-pointer border-primary/40 bg-primary/5' : ''
+                  }`}
+                >
+                  <CardHeader className="space-y-3 pb-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <CardTitle className="text-lg leading-snug">
+                          {project.project_name}
+                        </CardTitle>
+                        <CardDescription>
+                          {project.description ?? 'No description provided.'}
+                        </CardDescription>
+                      </div>
+                      {isEnrolled ? (
+                        <Badge variant="default" className="shrink-0">
+                          <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                          Enrolled
+                        </Badge>
                       ) : (
-                        <UserCircle className="h-4 w-4" />
+                        <Badge variant="secondary">
+                          {project.is_group_project ? 'Group' : 'Individual'}
+                        </Badge>
                       )}
-                      <span>
-                        {project.is_group_project
-                          ? 'Group Project'
-                          : 'Individual Project'}
-                      </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4" />
-                      <span>
-                        Deadline:{' '}
-                        {getDeadlineText(project.submission_deadline)}
-                      </span>
-                    </div>
-                  </div>
+                  </CardHeader>
 
-                  <Button
-                    className="w-full cursor-pointer"
-                    onClick={() => handleEnrollClick(project)}
-                  >
-                    Enroll Now
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+                  <CardContent className="flex flex-1 flex-col justify-between gap-5">
+                    <div className="space-y-3 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        <span>{project.lead_examiner_name ?? 'TBA'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {project.is_group_project ? (
+                          <Users className="h-4 w-4" />
+                        ) : (
+                          <UserCircle className="h-4 w-4" />
+                        )}
+                        <span>
+                          {project.is_group_project
+                            ? 'Group Project'
+                            : 'Individual Project'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        <span>
+                          Deadline:{' '}
+                          {getDeadlineText(project.submission_deadline)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {isEnrolled ? (
+                      <Button
+                        className="w-full cursor-pointer"
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          goToMyProject()
+                        }}
+                      >
+                        Go to My Projects
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        className="w-full cursor-pointer"
+                        onClick={() => handleEnrollClick(project)}
+                      >
+                        Enroll Now
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
 
           <Pagination

@@ -49,6 +49,27 @@ export const serverProjectService = {
     }
   },
 
+  /**
+   * Finds one enrolled project by id. `my-enrollments` is paginated at 9, so
+   * a project the student enrolled in earlier can sit past page 1 — page
+   * through until it turns up rather than only looking at the first page.
+   */
+  async findMyProject(projectId: string): Promise<EnrolledProject | null> {
+    const pageSize = 9
+    const firstPage = await this.getMyProjects({ page: 1 })
+    const match = firstPage.results.find((p) => p.id === projectId)
+    if (match) return match
+
+    const totalPages = Math.ceil(firstPage.count / pageSize)
+    for (let page = 2; page <= totalPages; page += 1) {
+      const { results } = await this.getMyProjects({ page })
+      const found = results.find((p) => p.id === projectId)
+      if (found) return found
+    }
+
+    return null
+  },
+
   async getSubmissionDetails(projectId: string) {
     const res = await serverFetch(PROJECT_API.submission(projectId), {
       method: 'GET',
