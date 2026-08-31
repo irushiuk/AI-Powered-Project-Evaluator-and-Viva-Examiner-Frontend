@@ -198,8 +198,11 @@ export function LiveVivaRoomView({
         onMicToggle={handleMicToggle}
         onLocalTracks={handleLocalTracks}
         hideEndCallButton
-        initialMute={false}
+        initialMute={Boolean(isExaminerView)}
         initialCamOff={isExaminerView}
+        micEnabledOverride={isExaminerView
+          ? Boolean(takeoverStatus?.paused)
+          : undefined}
         onRemoteAudioActivity={onRemoteAudioActivity}
         remoteJoinNotice="Examiner joining now"
         overlayContent={

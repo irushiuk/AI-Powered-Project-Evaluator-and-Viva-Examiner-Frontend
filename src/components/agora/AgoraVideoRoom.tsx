@@ -44,6 +44,8 @@ export interface AgoraVideoRoomProps {
   initialCamOff?: boolean
   /** If true, hides the default red PhoneOff end call button. */
   hideEndCallButton?: boolean
+  /** Controls the local call microphone for role-specific flows. */
+  micEnabledOverride?: boolean
   /** Reports real remote speech so local answer transcription can pause and
    * never capture another participant through the speakers. */
   onRemoteAudioActivity?: (active: boolean) => void
@@ -69,28 +71,32 @@ function closeScreenTrack(track: ScreenTrack) {
   }
 }
 
-export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle, onLocalTracks, remoteJoinNotice, onScreenShareChange, initialMute, initialCamOff, hideEndCallButton, onRemoteAudioActivity }: AgoraVideoRoomProps) {
+export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle, onLocalTracks, remoteJoinNotice, onScreenShareChange, initialMute, initialCamOff, hideEndCallButton, micEnabledOverride, onRemoteAudioActivity }: AgoraVideoRoomProps) {
   const [localVideoTrack, setLocalVideoTrack] = useState<ICameraVideoTrack | null>(null)
   // Refs keep the join effect's dependency list unchanged ([sessionId]).
   const onLocalTracksRef = useRef(onLocalTracks)
   const remoteJoinNoticeRef = useRef(remoteJoinNotice)
   const onScreenShareChangeRef = useRef(onScreenShareChange)
   const onRemoteAudioActivityRef = useRef(onRemoteAudioActivity)
+  const onMicToggleRef = useRef(onMicToggle)
 
   useEffect(() => {
     onLocalTracksRef.current = onLocalTracks
     remoteJoinNoticeRef.current = remoteJoinNotice
     onScreenShareChangeRef.current = onScreenShareChange
     onRemoteAudioActivityRef.current = onRemoteAudioActivity
+    onMicToggleRef.current = onMicToggle
   })
   const noticedUidsRef = useRef<Set<string | number>>(new Set())
   const [screenTrack, setScreenTrack] = useState<ScreenTrack>(null)
   const [remoteUsers, setRemoteUsers] = useState<IAgoraRTCRemoteUser[]>([])
   const [roster, setRoster] = useState<Record<number, string>>({})
+  const [screenShareUids, setScreenShareUids] = useState<number[]>([])
   const [isJoined, setIsJoined] = useState(false)
   const [isMuted, setIsMuted] = useState(initialMute ?? false)
   const [isCamOff, setIsCamOff] = useState(initialCamOff ?? false)
   const [isSharingScreen, setIsSharingScreen] = useState(false)
+  const [audioPlaybackBlocked, setAudioPlaybackBlocked] = useState(false)
   const [pinnedUid, setPinnedUid] = useState<PinnedParticipant>(null)
   const [pipWindow, setPipWindow] = useState<Window | null>(null)
 
@@ -109,6 +115,18 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
   const localAudioTrackRef = useRef<IMicrophoneAudioTrack | null>(null)
   const localVideoTrackRef = useRef<ICameraVideoTrack | null>(null)
   const screenTrackRef = useRef<ScreenTrack>(null)
+
+  useEffect(() => {
+    if (micEnabledOverride === undefined || !isJoined) return
+    const audioTrack = localAudioTrackRef.current
+    if (!audioTrack) return
+    void audioTrack.setEnabled(micEnabledOverride).then(() => {
+      setIsMuted(!micEnabledOverride)
+      onMicToggleRef.current?.(!micEnabledOverride)
+    }).catch(() => {
+      toast.error('Examiner microphone could not be enabled.')
+    })
+  }, [micEnabledOverride, isJoined])
 
   // Redirect local video stream output depending on whether we are pinned or thumbnail
   useEffect(() => {
@@ -194,6 +212,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
 
   useEffect(() => {
     let active = true
+    let restoreAudioAutoplayHandler: (() => void) | null = null
     const remoteAudioTracks = new Map<string | number, IRemoteAudioTrack>()
     let remoteAudioMonitorId: number | null = null
     let remoteAudioWasActive = false
@@ -202,6 +221,16 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
     const initAgora = async () => {
       try {
         const AgoraRTC = (await import('agora-rtc-sdk-ng')).default
+        const previousAudioAutoplayHandler = AgoraRTC.onAudioAutoplayFailed
+        AgoraRTC.onAudioAutoplayFailed = () => {
+          if (active) setAudioPlaybackBlocked(true)
+          previousAudioAutoplayHandler?.()
+        }
+        restoreAudioAutoplayHandler = () => {
+          if (AgoraRTC.onAudioAutoplayFailed !== previousAudioAutoplayHandler) {
+            AgoraRTC.onAudioAutoplayFailed = previousAudioAutoplayHandler
+          }
+        }
 
         // ── CRITICAL: Clean up any previous session BEFORE creating a new one ──
         // This handles React StrictMode double-mount and hot-reload scenarios.
@@ -255,8 +284,11 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         credentialsRef.current = credentials
 
         try {
-          const rosterMap = await agoraService.getAgoraRoster(sessionId)
-          if (active) setRoster(rosterMap)
+          const rosterData = await agoraService.getAgoraRoster(sessionId)
+          if (active) {
+            setRoster(rosterData.roster)
+            setScreenShareUids(rosterData.screenShareUids)
+          }
         } catch {
           // Participant names are optional; numeric UIDs remain available.
         }
@@ -436,6 +468,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
 
     return () => {
       active = false
+      restoreAudioAutoplayHandler?.()
       if (remoteAudioMonitorId !== null) {
         window.clearInterval(remoteAudioMonitorId)
         remoteAudioMonitorId = null
@@ -532,6 +565,17 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
     }
   }
 
+  const resumeRemoteAudio = async () => {
+    try {
+      const AgoraRTC = (await import('agora-rtc-sdk-ng')).default
+      AgoraRTC.resumeAudioContext()
+      for (const user of remoteUsers) user.audioTrack?.play()
+      setAudioPlaybackBlocked(false)
+    } catch {
+      toast.error('Could not enable call audio. Check the browser sound permission.')
+    }
+  }
+
   const toggleCamera = async () => {
     const videoTrack = localVideoTrackRef.current
     if (!videoTrack) return
@@ -625,6 +669,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
       pinnedLocalVideoRef={pinnedLocalVideoRef}
       remoteUsers={remoteUsers}
       roster={roster}
+      screenShareUids={screenShareUids}
       screenTrack={screenTrack}
       isMuted={isMuted}
       isCamOff={isCamOff}
@@ -638,6 +683,8 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
       hideEndCallButton={hideEndCallButton}
       extraControls={extraControls}
       overlayContent={overlayContent}
+      audioPlaybackBlocked={audioPlaybackBlocked}
+      resumeRemoteAudio={resumeRemoteAudio}
     />
   )
 }

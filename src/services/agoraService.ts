@@ -10,6 +10,11 @@ export interface AgoraTokenData {
   screen_share_uid?: number
 }
 
+export interface AgoraRosterData {
+  roster: Record<number, string>
+  screenShareUids: number[]
+}
+
 export const agoraService = {
   async getAgoraToken(sessionId: string): Promise<AgoraTokenData> {
     const res = await apiFetch(SESSIONS_API.agoraToken(sessionId), {
@@ -26,18 +31,22 @@ export const agoraService = {
     return (data.data ?? data) as AgoraTokenData
   },
 
-  async getAgoraRoster(sessionId: string): Promise<Record<number, string>> {
+  async getAgoraRoster(sessionId: string): Promise<AgoraRosterData> {
     const res = await apiFetch(SESSIONS_API.agoraRoster(sessionId), {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
     })
 
     if (!res.ok) {
-      console.warn('Failed to retrieve Agora roster names — falling back to UIDs.')
-      return {}
+      return { roster: {}, screenShareUids: [] }
     }
 
     const data = await res.json()
-    return (data.roster ?? {}) as Record<number, string>
+    return {
+      roster: (data.roster ?? {}) as Record<number, string>,
+      screenShareUids: Array.isArray(data.screen_share_uids)
+        ? data.screen_share_uids.map(Number).filter(Number.isFinite)
+        : [],
+    }
   },
 }

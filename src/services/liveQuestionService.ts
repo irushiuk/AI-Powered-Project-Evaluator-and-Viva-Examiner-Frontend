@@ -19,6 +19,7 @@ export interface LiveQuestion {
 export interface PendingLiveQuestion {
   pending: LiveQuestion | null
   examiner_speaking: boolean
+  paused: boolean
 }
 
 export interface SessionTakeoverStatus {
@@ -61,6 +62,7 @@ export const liveQuestionService = {
     return {
       pending: data.pending,
       examiner_speaking: Boolean(data.examiner_speaking),
+      paused: Boolean(data.paused),
     }
   },
 
