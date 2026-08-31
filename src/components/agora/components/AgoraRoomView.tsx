@@ -13,6 +13,7 @@ import {
   PhoneOff,
   Pin,
   User,
+  Volume2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,7 @@ interface AgoraRoomViewProps {
   pinnedLocalVideoRef: RefObject<HTMLDivElement | null>
   remoteUsers: IAgoraRTCRemoteUser[]
   roster: Record<number, string>
+  screenShareUids: number[]
   screenTrack: ScreenTrack
   isMuted: boolean
   isCamOff: boolean
@@ -41,10 +43,15 @@ interface AgoraRoomViewProps {
   hideEndCallButton?: boolean
   extraControls?: ReactNode
   overlayContent?: ReactNode
+  audioPlaybackBlocked: boolean
+  resumeRemoteAudio: () => Promise<void>
 }
 
-const isScreenShareUid = (uid: unknown): uid is number =>
-  typeof uid === 'number' && uid >= 1_000_000_000
+const isScreenShareUid = (
+  uid: unknown,
+  screenShareUids: number[],
+): uid is number =>
+  typeof uid === 'number' && screenShareUids.includes(uid)
 
 export function AgoraRoomView({
   className,
@@ -54,6 +61,7 @@ export function AgoraRoomView({
   pinnedLocalVideoRef,
   remoteUsers,
   roster,
+  screenShareUids,
   screenTrack,
   isMuted,
   isCamOff,
@@ -67,21 +75,26 @@ export function AgoraRoomView({
   hideEndCallButton,
   extraControls,
   overlayContent,
+  audioPlaybackBlocked,
+  resumeRemoteAudio,
 }: AgoraRoomViewProps) {
-  const remoteScreenShare = remoteUsers.find((user) => isScreenShareUid(user.uid))
+  const remoteScreenShare = remoteUsers.find((user) =>
+    isScreenShareUid(user.uid, screenShareUids),
+  )
   const activeScreenShare = remoteScreenShare || (
     isSharingScreen ? { uid: 'local_screen' as const, videoTrack: screenTrack } : null
   )
-  const regularRemoteUsers = remoteUsers.filter((user) => !isScreenShareUid(user.uid))
+  const regularRemoteUsers = remoteUsers.filter((user) =>
+    !isScreenShareUid(user.uid, screenShareUids),
+  )
   const displayUid = pinnedUid ?? activeScreenShare?.uid ?? null
   const isTheaterLayout = displayUid !== null
 
   let presenterTitle = ''
   if (displayUid === 'local_screen') {
     presenterTitle = 'You are presenting'
-  } else if (isScreenShareUid(displayUid)) {
-    const ownerUid = displayUid - 1_000_000_000
-    presenterTitle = `${roster[ownerUid] || `Participant (${ownerUid})`} is presenting`
+  } else if (isScreenShareUid(displayUid, screenShareUids)) {
+    presenterTitle = roster[displayUid] || `Screen share (${displayUid})`
   } else if (displayUid === 'local') {
     presenterTitle = 'You'
   } else if (displayUid !== null) {
@@ -205,6 +218,19 @@ export function AgoraRoomView({
       </div>
 
       {overlayContent}
+
+      {audioPlaybackBlocked && (
+        <div className="absolute left-1/2 top-4 z-50 -translate-x-1/2 rounded-xl border border-amber-400/40 bg-slate-950/95 p-2 shadow-2xl backdrop-blur">
+          <Button
+            type="button"
+            onClick={resumeRemoteAudio}
+            className="bg-amber-500 text-slate-950 hover:bg-amber-400"
+          >
+            <Volume2 className="mr-2 h-4 w-4" />
+            Enable call audio
+          </Button>
+        </div>
+      )}
 
       {!pipWindow && (
         <div className="bg-slate-900/70 backdrop-blur-md border-t border-slate-800/60 px-6 py-4 flex items-center justify-center gap-4 shrink-0">
