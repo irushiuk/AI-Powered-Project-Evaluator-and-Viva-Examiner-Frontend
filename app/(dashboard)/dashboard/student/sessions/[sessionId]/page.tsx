@@ -17,7 +17,18 @@ type PageProps = {
 
 export default async function SessionDetailPage({ params, searchParams }: PageProps) {
   const { sessionId } = await params
-  const { projectId } = await searchParams
+  const { projectId: projectIdParam } = await searchParams
+
+  // The session API is project-scoped, so the caller normally passes the
+  // project id along. Links that omit it (or a bookmarked/shared URL) still
+  // resolve here by looking the session up in the student's own session list.
+  let projectId = projectIdParam
+  if (!projectId) {
+    projectId = await serverSessionService
+      .getAllMySessions()
+      .then((data) => data.results.find((s) => s.session_id === sessionId)?.project_id)
+      .catch(() => undefined)
+  }
 
   if (!projectId) {
     return (
@@ -30,7 +41,9 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
         </Link>
         <Card>
           <CardContent className="pt-8">
-            <p className="text-muted-foreground">Project ID not found</p>
+            <p className="text-muted-foreground">
+              This session could not be found in your sessions.
+            </p>
           </CardContent>
         </Card>
       </div>

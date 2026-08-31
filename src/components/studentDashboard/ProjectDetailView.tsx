@@ -294,7 +294,7 @@ export function ProjectDetailView({ initialProject = null, initialSubmissionData
               </div>
             </div>
             <Link
-              href={`/dashboard/student/sessions/${project.session_details.session_id}`}
+              href={`/dashboard/student/sessions/${project.session_details.session_id}?projectId=${project.id}`}
             >
               <Button className="cursor-pointer">
                 Go to Session
