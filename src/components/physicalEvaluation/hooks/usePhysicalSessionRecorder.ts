@@ -96,10 +96,10 @@ export function usePhysicalSessionRecorder() {
     stream: MediaStream,
     resume: RecordingResumeOptions = {},
   ) => {
-    if (recorderRef.current?.state === "recording") return true
+    if (recorderRef.current?.state === "recording") return startedAtRef.current
     if (typeof MediaRecorder === "undefined") {
       setUploadError("This browser cannot record the physical session.")
-      return false
+      return null
     }
     const mimeType = mimeTypeForBrowser()
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
@@ -156,7 +156,7 @@ export function usePhysicalSessionRecorder() {
     recorder.start(10_000)
     recorderRef.current = recorder
     setRecording(true)
-    return true
+    return startedAtRef.current
   }, [])
 
   const beginBackgroundFinalization = useCallback(async (sessionId: string) => {

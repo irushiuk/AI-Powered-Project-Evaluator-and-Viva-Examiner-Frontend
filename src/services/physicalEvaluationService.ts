@@ -160,6 +160,18 @@ export const physicalEvaluationService = {
     return readJson(response, "Failed to start the physical evaluation");
   },
 
+  async startRecording(
+    sessionId: string,
+    startedAt: string,
+  ): Promise<PhysicalRun> {
+    const response = await kioskFetch(PHYSICAL_API.startRecording(sessionId), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ started_at: startedAt }),
+    });
+    return readJson(response, "Failed to start the protected room recording");
+  },
+
   async completeDemo(sessionId: string): Promise<void> {
     const response = await kioskFetch(PHYSICAL_API.completeDemo(sessionId), {
       method: "POST",
