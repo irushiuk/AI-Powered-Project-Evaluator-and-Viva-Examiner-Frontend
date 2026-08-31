@@ -35,6 +35,7 @@ export type Session = {
   scheduled_end: string
   location_room: string
   status: SessionStatus
+  recording_status?: 'capturing' | 'uploading' | 'finalizing' | 'ready' | 'failed' | null
 }
 
 // ── Auto-scheduling payload ───────────────────────────────────────────────────

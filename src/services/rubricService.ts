@@ -181,6 +181,7 @@ export const rubricService = {
             max_score: cr.max_score,
             weight_in_category: cr.weight_in_category ?? 100,
             description: cr.description ?? '',
+            is_individual: cr.is_individual ?? true,
           }),
         })
         if (!crRes.ok) {

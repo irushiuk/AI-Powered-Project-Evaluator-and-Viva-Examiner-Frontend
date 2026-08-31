@@ -5,6 +5,7 @@ export type RubricCriteria = {
   max_score: number
   weight_in_category: number
   description?: string
+  is_individual: boolean
 }
 
 export type RubricCategory = {
@@ -29,6 +30,7 @@ export type CreateCriteriaPayload = {
   max_score: number
   weight_in_category: number
   description?: string
+  is_individual: boolean
 }
 
 export type UpdateCriteriaPayload = Partial<CreateCriteriaPayload>
