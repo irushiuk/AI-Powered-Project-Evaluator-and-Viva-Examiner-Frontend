@@ -21,6 +21,8 @@ import {
   UsersRound,
   Video,
   Volume2,
+  AlertTriangle,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -30,6 +32,7 @@ import PhysioBandPanel from "@/components/physicalEvaluation/PhysioBandPanel";
 import { physicalEvaluationService } from "@/services/physicalEvaluationService";
 import type {
   PhysicalRun,
+  PhysicalIdentityReview,
   PhysicalSubmitVivaAnswerResponse,
   PhysicalSession,
   PhysicalSessionList,
@@ -48,6 +51,8 @@ type KioskPhase =
   | "locked"
   | "list"
   | "preparing"
+  | "identity_review"
+  | "sensor_setup"
   | "demo"
   | "viva"
   | "finalizing"
@@ -226,6 +231,13 @@ export default function PhysicalKiosk() {
     "idle" | "scanning" | "ready" | "failed"
   >("idle");
   const [faceBindingError, setFaceBindingError] = useState("");
+  const [identityReview, setIdentityReview] =
+    useState<PhysicalIdentityReview | null>(null);
+  const [identityOverrideAccepted, setIdentityOverrideAccepted] = useState(false);
+  const [identityOverridePin, setIdentityOverridePin] = useState("");
+  const [identityOverrideReason, setIdentityOverrideReason] = useState("");
+  const [nextEvaluationPhase, setNextEvaluationPhase] =
+    useState<"demo" | "viva">("viva");
   const [busy, setBusy] = useState(false);
   const [answerProgress, setAnswerProgress] =
     useState<AnswerProgress>("idle");
@@ -244,7 +256,7 @@ export default function PhysicalKiosk() {
   const bootstrappedRef = useRef(false);
   const bindingInFlightRef = useRef<{
     sessionId: string;
-    promise: Promise<boolean>;
+    promise: Promise<PhysicalIdentityReview | null>;
   } | null>(null);
   const studentNames = useMemo(
     () => Object.fromEntries(
@@ -462,10 +474,10 @@ export default function PhysicalKiosk() {
    *
    * Recognition is expensive but only changes when someone moves seats, so it
    * runs here — once, at the start — rather than per frame. The result is
-   * advisory: uncertain answers remain available for examiner review instead
-   * of being assigned to a student by a weak match.
+   * blocking: the roster must be complete or the examiner must explicitly
+   * authorize an override from the identity-review screen.
    */
-  const bindSeats = useCallback((sessionId: string): Promise<boolean> => {
+  const bindSeats = useCallback((sessionId: string): Promise<PhysicalIdentityReview | null> => {
     const inFlight = bindingInFlightRef.current;
     if (inFlight?.sessionId === sessionId) return inFlight.promise;
 
@@ -480,34 +492,34 @@ export default function PhysicalKiosk() {
       if (!video || !video.videoWidth) {
         setFaceBindingStatus("failed");
         setFaceBindingError("The camera preview was not ready. Please retry identification.");
-        return false;
+        return null;
       }
 
       try {
         const frames = await captureBindingFrames(video);
         const result = await physicalEvaluationService.bindSeats(sessionId, frames);
+        setIdentityReview(result);
         setSeatBindings(result.bindings);
         setMissingEnrollment(result.missing_enrollment ?? []);
-        if (result.bindings.some((binding) => binding.student_id)) {
+        if (result.complete) {
           setFaceBindingStatus("ready");
-          return true;
+          return result;
         }
         setFaceBindingStatus("failed");
         setFaceBindingError(
-          "No enrolled student was identified. Keep everyone visible and retry.",
+          result.error || "Every expected member must be verified and extra faces must leave the frame.",
         );
-        return false;
+        return result;
       } catch (bindingError) {
-        // A failed preflight must not stop the viva. Answers remain eligible for
-        // examiner attribution review instead of being assigned by a guess.
         setSeatBindings([]);
+        setIdentityReview(null);
         setFaceBindingStatus("failed");
         setFaceBindingError(
           bindingError instanceof Error
             ? bindingError.message
             : "Student identification failed. Please retry.",
         );
-        return false;
+        return null;
       }
     })();
 
@@ -547,6 +559,43 @@ export default function PhysicalKiosk() {
     [],
   );
 
+  const submitIdentityOverride = useCallback(async () => {
+    if (!activeSession || busy) return;
+    setBusy(true);
+    setFaceBindingError("");
+    try {
+      await physicalEvaluationService.overrideIdentity(
+        activeSession.session_id,
+        identityOverridePin,
+        identityOverrideReason,
+      );
+      setIdentityOverrideAccepted(true);
+      setIdentityOverridePin("");
+    } catch (overrideError) {
+      setFaceBindingError(
+        overrideError instanceof Error
+          ? overrideError.message
+          : "The examiner override could not be recorded.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [activeSession, busy, identityOverridePin, identityOverrideReason]);
+
+  const continueAfterIdentityReview = useCallback(() => {
+    if (!identityReview?.complete && !identityOverrideAccepted) return;
+    setPhase("sensor_setup");
+  }, [identityOverrideAccepted, identityReview]);
+
+  const continueAfterSensorSetup = useCallback(async () => {
+    if (!activeSession) return;
+    if (nextEvaluationPhase === "demo") {
+      setPhase("demo");
+      return;
+    }
+    await beginViva(activeSession);
+  }, [activeSession, beginViva, nextEvaluationPhase]);
+
   const resumeActiveRun = useCallback(
     async (run: PhysicalRun) => {
       setActiveSession(run.session);
@@ -575,10 +624,23 @@ export default function PhysicalKiosk() {
         });
       }
 
-      // Identify the room while it is still on the preparation screen. This
-      // keeps Modal cold-start time outside question one and ensures that live
-      // speaker evidence exists before a student can answer.
-      if (run.session.group) await bindSeats(run.session.session_id);
+      if (run.session.group && run.identity_status === "pending") {
+        setNextEvaluationPhase(
+          run.status === "demo_in_progress" ? "demo" : "viva",
+        );
+        await bindSeats(run.session.session_id);
+        setPhase("identity_review");
+        return;
+      }
+      if (run.session.group) {
+        const stored = run.identity_verification as PhysicalIdentityReview;
+        if (Array.isArray(stored?.roster)) {
+          setIdentityReview(stored);
+          setSeatBindings(stored.bindings || []);
+          setMissingEnrollment(stored.missing_enrollment || []);
+        }
+        setIdentityOverrideAccepted(run.identity_status === "overridden");
+      }
 
       if (run.status === "demo_in_progress") {
         setPhase("demo");
@@ -659,6 +721,8 @@ export default function PhysicalKiosk() {
 
   const evaluationActive = [
     "preparing",
+    "identity_review",
+    "sensor_setup",
     "demo",
     "viva",
     "finalizing",
@@ -692,6 +756,10 @@ export default function PhysicalKiosk() {
     setMissingEnrollment([]);
     setFaceBindingStatus("idle");
     setFaceBindingError("");
+    setIdentityReview(null);
+    setIdentityOverrideAccepted(false);
+    setIdentityOverridePin("");
+    setIdentityOverrideReason("");
     setSelectedSession(null);
     setPhase("preparing");
 
@@ -707,17 +775,18 @@ export default function PhysicalKiosk() {
         sessionRecorder.start(run.session.session_id, mediaStreamRef.current);
       }
       setSpeakerId(run.session.student?.student_id || "group");
-      // The run is now authorized for attribution and the camera preview is
-      // already live. Finish the one-time identity preflight before exposing
-      // the demo controls or the first viva question.
-      if (run.session.group) await bindSeats(run.session.session_id);
-      if (
+      const requestedNextPhase = (
         run.next_action === "start_demo" ||
         run.status === "demo_in_progress"
-      ) {
-        setPhase("demo");
+      ) ? "demo" : "viva";
+      setNextEvaluationPhase(requestedNextPhase);
+      if (run.session.group) {
+        await bindSeats(run.session.session_id);
+        setPhase("identity_review");
       } else {
-        await beginViva(run.session);
+        // Identity selection and heart-rate wearer selection are deliberately
+        // separate. Individuals skip face review but still see band setup.
+        setPhase("sensor_setup");
       }
     } catch (startError) {
       // The backend may have committed the run even if the response was lost
@@ -929,6 +998,10 @@ export default function PhysicalKiosk() {
     setMissingEnrollment([]);
     setFaceBindingStatus("idle");
     setFaceBindingError("");
+    setIdentityReview(null);
+    setIdentityOverrideAccepted(false);
+    setIdentityOverridePin("");
+    setIdentityOverrideReason("");
     setError("");
     setPhase("list");
   };
@@ -1197,6 +1270,173 @@ export default function PhysicalKiosk() {
         </EvaluationShell>
       )}
 
+      {phase === "identity_review" && (
+        <EvaluationShell
+          session={activeSession}
+          videoRef={attachPreview}
+          cameraActive
+          bindings={identityReview?.bindings || []}
+          studentNames={studentNames}
+        >
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-indigo-300">
+                  Required identity review
+                </p>
+                <h2 className="mt-1 text-2xl font-semibold text-white">
+                  Confirm every expected group member
+                </h2>
+              </div>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                identityReview?.complete
+                  ? "bg-emerald-500/15 text-emerald-300"
+                  : identityOverrideAccepted
+                    ? "bg-amber-500/15 text-amber-300"
+                    : "bg-red-500/15 text-red-300"
+              }`}>
+                {identityReview?.complete
+                  ? "All verified"
+                  : identityOverrideAccepted
+                    ? "Examiner override recorded"
+                    : "Blocked"}
+              </span>
+            </div>
+
+            <div className="mt-5 space-y-2">
+              {(identityReview?.roster || activeSession?.group?.members.map((member) => ({
+                ...member,
+                status: "not_detected" as const,
+                confidence: null,
+                identity_margin: null,
+                votes: 0,
+              })) || []).map((member) => {
+                const verified = member.status === "verified";
+                const unusable = member.status === "no_usable_enrollment";
+                return (
+                  <div key={member.student_id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      {verified ? (
+                        <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />
+                      ) : unusable ? (
+                        <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400" />
+                      ) : (
+                        <XCircle className="h-5 w-5 shrink-0 text-red-400" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-white">{member.full_name}</p>
+                        <p className="text-xs text-slate-500">{member.registration_number}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`text-xs font-semibold ${
+                        verified ? "text-emerald-300" : unusable ? "text-amber-300" : "text-red-300"
+                      }`}>
+                        {verified ? "Verified" : unusable ? "No usable enrollment" : "Not detected"}
+                      </p>
+                      {verified && typeof member.confidence === "number" && (
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          {Math.round(member.confidence * 100)}% · {member.votes} frame votes
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {(identityReview?.unknown_faces.length || 0) > 0 && (
+              <p className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                {identityReview?.unknown_faces.length} unknown/extra face{identityReview?.unknown_faces.length === 1 ? "" : "s"} detected. Red boxes are shown over the camera preview.
+              </p>
+            )}
+            <p className="mt-3 text-xs text-slate-500">
+              {identityReview
+                ? `${identityReview.frames_processed}/${identityReview.required_frames} verification frames · engine ${identityReview.engine_version}`
+                : "No complete verification result is available."}
+            </p>
+            {faceBindingError && (
+              <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+                {faceBindingError}
+              </p>
+            )}
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Button
+                variant="outline"
+                disabled={faceBindingStatus === "scanning" || !activeSession}
+                onClick={() => activeSession && void bindSeats(activeSession.session_id)}
+                className="border-slate-700 bg-slate-950 text-slate-200 hover:bg-slate-800 hover:text-white"
+              >
+                {faceBindingStatus === "scanning" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Retry five-frame scan
+              </Button>
+              <Button
+                onClick={continueAfterIdentityReview}
+                disabled={!identityReview?.complete && !identityOverrideAccepted}
+                className="bg-emerald-600 text-white hover:bg-emerald-500"
+              >
+                Continue to heart-rate setup
+              </Button>
+            </div>
+
+            {!identityReview?.complete && !identityOverrideAccepted && (
+              <div className="mt-6 border-t border-slate-800 pt-5">
+                <p className="text-sm font-semibold text-amber-300">Examiner PIN override</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Use only after visually checking the students. The reason, examiner, and time are recorded.
+                </p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <input
+                    type="password"
+                    value={identityOverridePin}
+                    onChange={(event) => setIdentityOverridePin(event.target.value)}
+                    placeholder="Examiner PIN"
+                    className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-400"
+                  />
+                  <input
+                    value={identityOverrideReason}
+                    onChange={(event) => setIdentityOverrideReason(event.target.value)}
+                    placeholder="Reason for override"
+                    className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-400"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => void submitIdentityOverride()}
+                  disabled={busy || !identityOverridePin || identityOverrideReason.trim().length < 5}
+                  className="mt-3 border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 hover:text-amber-100"
+                >
+                  Authorize override
+                </Button>
+              </div>
+            )}
+          </div>
+        </EvaluationShell>
+      )}
+
+      {phase === "sensor_setup" && (
+        <EvaluationShell session={activeSession} videoRef={attachPreview} cameraActive>
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+            <p className="text-xs font-semibold uppercase tracking-wider text-rose-300">
+              Separate optional step
+            </p>
+            <h2 className="mt-1 text-2xl font-semibold text-white">Choose the heart-rate sensor wearer</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              Identity verification confirms who is in the room. This step separately records who is physically wearing the sensor; it does not change or re-run face identification.
+            </p>
+            {activeSession && <PhysioBandPanel sessionId={activeSession.session_id} />}
+            <Button
+              onClick={() => void continueAfterSensorSetup()}
+              disabled={busy}
+              className="mt-5 bg-emerald-600 text-white hover:bg-emerald-500"
+            >
+              {nextEvaluationPhase === "demo" ? "Continue to demonstration" : "Continue to AI viva"}
+            </Button>
+          </div>
+        </EvaluationShell>
+      )}
+
       {phase === "demo" && (
         <EvaluationShell
           session={activeSession}
@@ -1238,12 +1478,6 @@ export default function PhysicalKiosk() {
               )}
             </Button>
 
-            {/* Band setup lives here because both steps must happen BEFORE
-                questioning starts: an unbound band records nothing, and a
-                baseline taken during the viva would already be elevated. */}
-            {activeSession && (
-              <PhysioBandPanel sessionId={activeSession.session_id} />
-            )}
           </div>
         </EvaluationShell>
       )}
@@ -1618,11 +1852,15 @@ function EvaluationShell({
   session,
   videoRef,
   cameraActive = false,
+  bindings = [],
+  studentNames = {},
   children,
 }: {
   session: PhysicalSession | null;
   videoRef: (node: HTMLVideoElement | null) => void;
   cameraActive?: boolean;
+  bindings?: SeatBinding[];
+  studentNames?: Record<string, string>;
   children: React.ReactNode;
 }) {
   return (
@@ -1636,6 +1874,30 @@ function EvaluationShell({
             playsInline
             className="h-full w-full object-cover"
           />
+          {bindings
+            .filter((binding) => binding.bbox?.length === 4)
+            .map((binding, index) => {
+              const bbox = binding.bbox as number[];
+              const known = Boolean(binding.student_id);
+              return (
+                <div
+                  key={`${binding.student_id || "unknown"}-${index}`}
+                  className={`pointer-events-none absolute border-2 ${known ? "border-emerald-400" : "border-red-400"}`}
+                  style={{
+                    left: `${Math.max(0, bbox[0]) * 100}%`,
+                    top: `${Math.max(0, bbox[1]) * 100}%`,
+                    width: `${Math.max(0, bbox[2] - bbox[0]) * 100}%`,
+                    height: `${Math.max(0, bbox[3] - bbox[1]) * 100}%`,
+                  }}
+                >
+                  <span className={`absolute -top-6 left-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-semibold text-white ${known ? "bg-emerald-600" : "bg-red-600"}`}>
+                    {binding.student_id
+                      ? studentNames[binding.student_id] || "Verified member"
+                      : "Unknown / extra face"}
+                  </span>
+                </div>
+              );
+            })}
           <div className="absolute bottom-3 left-3 rounded-lg bg-black/65 px-2.5 py-1.5 text-xs text-white">
             Room camera
           </div>
