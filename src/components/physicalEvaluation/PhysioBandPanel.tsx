@@ -43,6 +43,10 @@ export default function PhysioBandPanel({ sessionId }: { sessionId: string }) {
   // Refs, not state: the poll loop reads these and must not re-subscribe.
   const capturingRef = useRef(false)
   const attemptsRef = useRef(0)
+  // Auto-bind is a one-shot. If another kiosk tab claims the same band, this
+  // panel must not immediately claim it back - two tabs would then trade the
+  // band every poll and neither session would ever collect a clean baseline.
+  const autoBoundRef = useRef(false)
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = useCallback(async () => {
@@ -98,8 +102,9 @@ export default function PhysioBandPanel({ sessionId }: { sessionId: string }) {
       const data = await refresh()
       if (stopped || !data) return
 
-      // Bind automatically when there is only one possible wearer.
-      if (!data.student_id && data.roster.length === 1) {
+      // Bind automatically when there is only one possible wearer, once.
+      if (!data.student_id && data.roster.length === 1 && !autoBoundRef.current) {
+        autoBoundRef.current = true
         try {
           await physicalEvaluationService.bindPhysioDevice(
             sessionId,
@@ -284,13 +289,20 @@ function describe(
   }
 
   if (!state.signal?.live) {
+    // "No finger detected" and "nothing is reaching us at all" look identical
+    // from the outside and send you to opposite places - the clip, or the
+    // relay. `recent_samples` is what tells them apart, so it decides the
+    // wording rather than the contact flag alone.
+    const nothingArriving = (state.signal?.recent_samples ?? 0) === 0
     return {
       icon: spinner,
       tone: 'text-slate-300',
-      title: `Waiting for the band on ${state.student_name}`,
-      detail: state.signal?.contact === false
-        ? 'No finger detected on the sensor yet.'
-        : 'Fit the clip — the calm period starts by itself once a pulse is found.',
+      title: nothingArriving
+        ? 'No data reaching the system from the band'
+        : `Waiting for the band on ${state.student_name}`,
+      detail: nothingArriving
+        ? 'The band may be streaming to its screen while nothing relays it here. Check the station relay is running (VivaSenseStationRelay) and that the band is powered.'
+        : 'No finger detected on the sensor yet — fit the clip and the calm period starts by itself.',
     }
   }
 
