@@ -10,6 +10,7 @@ import type {
   PhysicalCompletion,
   PhysicalRecordingUpload,
   PhysicalRun,
+  PhysicalIdentityReview,
   PhysicalSessionList,
   PhysicalSubmitVivaAnswerResponse,
   StartVivaResponse,
@@ -166,6 +167,19 @@ export const physicalEvaluationService = {
     await readJson<unknown>(response, "Failed to complete the demonstration");
   },
 
+  async overrideIdentity(
+    sessionId: string,
+    pin: string,
+    reason: string,
+  ): Promise<PhysicalRun> {
+    const response = await kioskFetch(PHYSICAL_API.overrideIdentity(sessionId), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin, reason }),
+    });
+    return readJson(response, "Failed to authorize the identity review override");
+  },
+
   async finishSession(sessionId: string): Promise<PhysicalRun> {
     const response = await kioskFetch(PHYSICAL_API.finishSession(sessionId), {
       method: "POST",
@@ -318,19 +332,7 @@ export const physicalEvaluationService = {
   async bindSeats(
     sessionId: string,
     frames: Blob[],
-  ): Promise<{
-    bindings: {
-      student_id: string | null;
-      confidence: number;
-      bbox?: number[] | null;
-      identity_confidence?: number | null;
-      votes?: number;
-      frames_processed?: number;
-    }[];
-    unmatched: number;
-    missing_enrollment: string[];
-    frames_processed: number;
-  }> {
+  ): Promise<PhysicalIdentityReview> {
     const formData = new FormData();
     frames.forEach((frame, index) => {
       formData.append("frames", frame, `bind-${index + 1}.jpg`);
