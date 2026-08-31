@@ -38,7 +38,7 @@ export function SessionCompletedView({ results }: SessionCompletedViewProps) {
       </TabsList>
 
       <TabsContent value="overview" className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -48,8 +48,10 @@ export function SessionCompletedView({ results }: SessionCompletedViewProps) {
             <CardContent>
               {results.scores_status === 'approved' ? (
                 <>
-                  <div className="text-4xl font-bold text-primary">{results.score}</div>
-                  <p className="mt-1 text-xs text-muted-foreground">out of 100</p>
+                  <div className="text-4xl font-bold text-primary">
+                    {results.score} / {results.scoreMaximum}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">Weighted viva result</p>
                 </>
               ) : (
                 <div className="text-lg font-semibold text-amber-600 mt-2">Waiting for Examiner Approval</div>
@@ -57,21 +59,6 @@ export function SessionCompletedView({ results }: SessionCompletedViewProps) {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm font-medium text-muted-foreground">Grade</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {results.scores_status === 'approved' ? (
-                <>
-                  <div className="text-4xl font-bold text-accent">{results.grade}</div>
-                  <p className="mt-1 text-xs text-muted-foreground">Overall assessment</p>
-                </>
-              ) : (
-                <div className="text-lg font-semibold text-amber-600 mt-2">Pending</div>
-              )}
-            </CardContent>
-          </Card>
         </div>
 
         <Card>
@@ -235,25 +222,17 @@ export function SessionCompletedView({ results }: SessionCompletedViewProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-center">
                 {results.scores_status === 'approved' ? (
                   <>
-                    <div className="mb-1 text-3xl font-bold text-primary">{results.score}</div>
-                    <p className="text-xs text-muted-foreground">Final Score</p>
+                    <div className="mb-1 text-3xl font-bold text-primary">
+                      {results.score} / {results.scoreMaximum}
+                    </div>
+                    <p className="text-xs text-muted-foreground">Weighted Final Score</p>
                   </>
                 ) : (
                   <div className="mb-1 text-sm font-bold text-amber-600 mt-3">Waiting for Approval</div>
-                )}
-              </div>
-              <div className="rounded-lg border border-accent/20 bg-accent/5 p-4 text-center">
-                {results.scores_status === 'approved' ? (
-                  <>
-                    <div className="mb-1 text-3xl font-bold text-accent">{results.grade}</div>
-                    <p className="text-xs text-muted-foreground">Grade</p>
-                  </>
-                ) : (
-                  <div className="mb-1 text-sm font-bold text-amber-600 mt-3">Pending</div>
                 )}
               </div>
               <div className="rounded-lg border border-secondary/20 bg-secondary/5 p-4 text-center">

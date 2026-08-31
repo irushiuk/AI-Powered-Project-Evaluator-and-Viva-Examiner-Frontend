@@ -596,17 +596,20 @@ function AutoScheduleModal({
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1.5 block">
-                Viva Weight (%)
+                Session Score Maximum
               </label>
               <input
                 type="number"
-                placeholder="e.g. 20"
+                placeholder="e.g. 40"
                 min={1}
                 max={100}
                 value={vivaWeightPercentage}
                 onChange={(e) => setVivaWeightPercentage(e.target.value)}
                 className={`w-full ${inputBase}`}
               />
+              <p className="mt-1 text-xs text-gray-500">
+                The result will be shown against this value, for example 32.5 / 40.
+              </p>
             </div>
           </div>
         </div>
@@ -817,17 +820,20 @@ function ManualScheduleModal({
             </div>
             <div>
               <label className="text-xs font-medium text-gray-700 mb-1.5 block">
-                Viva Weight (%)
+                Session Score Maximum
               </label>
               <input
                 type="number"
-                placeholder="e.g. 20"
+                placeholder="e.g. 40"
                 min={1}
                 max={100}
                 value={vivaWeightPercentage}
                 onChange={(e) => setVivaWeightPercentage(e.target.value)}
                 className={`w-full ${inputBase}`}
               />
+              <p className="mt-1 text-xs text-gray-500">
+                The result will be shown against this value, for example 24 / 30.
+              </p>
             </div>
           </div>
         </div>

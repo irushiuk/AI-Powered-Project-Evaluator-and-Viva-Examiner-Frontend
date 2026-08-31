@@ -30,14 +30,10 @@ export function DownloadEvaluationButton({ results }: DownloadEvaluationButtonPr
     let htmlContent = `
       <h1 style="color: #111; border-bottom: 2px solid #eee; padding-bottom: 10px;">AI Evaluation Report</h1>
       
-      <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin: 20px 0; display: flex; justify-content: space-around; text-align: center;">
+      <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;">
         <div>
-          <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 5px;">Final Score</div>
-          <div style="font-size: 28px; font-weight: bold; color: #2563eb;">${results.score} / 100</div>
-        </div>
-        <div>
-          <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 5px;">Grade</div>
-          <div style="font-size: 28px; font-weight: bold; color: #16a34a;">${results.grade}</div>
+          <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 5px;">Weighted Final Score</div>
+          <div style="font-size: 28px; font-weight: bold; color: #2563eb;">${results.score} / ${results.scoreMaximum}</div>
         </div>
       </div>
       

@@ -44,7 +44,8 @@ export type TranscriptItem = {
 
 export type SessionResults = {
   score: number
-  grade: string
+  scoreMaximum: number
+  scorePercentage?: number
   scores_status?: string
   summary: string
   submission: {
