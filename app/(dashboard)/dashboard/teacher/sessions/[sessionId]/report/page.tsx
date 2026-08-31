@@ -359,21 +359,10 @@ export default function SessionDetailedReportPage() {
     try {
       await vivaSessionService.patchAnswerScore(sessionId, answerId, scoreNum, "");
       toast.success("Score updated");
-      setData((prev: any) => ({
-        ...prev,
-        timeline: prev.timeline.map((item: any) => {
-          const updateAnswer = (answer: any) => answer?.answer_id === answerId
-            ? { ...answer, examiner_override_score: scoreNum }
-            : answer
-          return {
-            ...item,
-            answer: updateAnswer(item.answer),
-            answers: Array.isArray(item.answers)
-              ? item.answers.map(updateAnswer)
-              : item.answers,
-          }
-        })
-      }));
+      // Reload the report so the edited answer and every affected student's
+      // aggregate score change together instead of leaving a stale header.
+      const refreshed = await vivaSessionService.getSessionDetailedReport(sessionId)
+      setData(refreshed)
       setEditingScoreId(null);
     } catch (err: any) {
       toast.error(err.message || "Failed to update score");

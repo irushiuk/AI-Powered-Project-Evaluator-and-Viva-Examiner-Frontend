@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useState } from "react"
 import { GraduationCap, Eye, EyeOff } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -12,13 +13,11 @@ import useAuth from "@/hooks/useAuth"
 export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const auth = useAuth()
   const loginPending = isSubmitting || auth.isLoading
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setError(null)
     setIsSubmitting(true)
 
     const formData = new FormData(e.currentTarget)
@@ -28,7 +27,7 @@ export default function LoginForm() {
     try {
       await auth.login(email, password)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed")
+      toast.error(err instanceof Error ? err.message : "Login failed")
     } finally {
       setIsSubmitting(false)
     }
@@ -102,8 +101,6 @@ export default function LoginForm() {
                   </div>
                 </Field>
             </FieldGroup>
-
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
             <Button type="submit" className="w-full" size="lg" disabled={loginPending}>
               {loginPending ? "Logging" : "Login"}

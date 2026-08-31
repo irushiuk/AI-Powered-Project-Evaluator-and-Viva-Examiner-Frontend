@@ -9,6 +9,9 @@ import { AUTH_API } from '@/constants/api.constant'
 export interface FacePhotoState {
   has_photo: boolean
   photo_url: string | null
+  sample_urls: string[]
+  sample_count: number
+  registration_status: 'required' | 'needs_improvement' | 'complete'
 }
 
 async function parseError(res: Response, fallback: string): Promise<never> {
@@ -25,10 +28,14 @@ export const facePhotoService = {
     return (body.data ?? body) as FacePhotoState
   },
 
-  /** Store or replace the photo. */
-  async upload(photo: Blob, filename = 'face.jpg'): Promise<FacePhotoState> {
+  /** Atomically replace enrollment with 3-5 complementary samples. */
+  async upload(photos: Blob[] | Blob, _legacyFilename?: string): Promise<FacePhotoState> {
     const form = new FormData()
-    form.append('photo', photo, filename)
+    const samples = Array.isArray(photos) ? photos : [photos]
+    samples.forEach((photo, index) => {
+      const extension = photo.type === 'image/png' ? 'png' : 'jpg'
+      form.append('photos', photo, `face-sample-${index + 1}.${extension}`)
+    })
     const res = await apiFetch(AUTH_API.facePhoto, {
       method: 'POST',
       body: form, // browser sets the multipart boundary

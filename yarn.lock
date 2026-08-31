@@ -2,6 +2,12 @@
 # yarn lockfile v1
 
 
+"@mediapipe/tasks-vision@^1.0.1":
+  version "1.0.1"
+  resolved "https://registry.npmjs.org/@mediapipe/tasks-vision/-/tasks-vision-1.0.1.tgz"
+  integrity sha512-rvRE2FmAZ6ZxKSw7wq+e+jQDpN3t1B/tD2mJz9SmAzb1msoDkd4dMoE4wAh8Z30Um0PQwLiHr9QtomhmXk3aUQ==
+
+
 "@agora-js/media@4.24.5":
   version "4.24.5"
   resolved "https://registry.npmjs.org/@agora-js/media/-/media-4.24.5.tgz"

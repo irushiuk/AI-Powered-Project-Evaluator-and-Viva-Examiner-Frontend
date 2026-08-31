@@ -61,6 +61,7 @@ export const SESSIONS_API = {
 
 // Speaker attribution — who answered, in a group viva.
 export const ATTRIBUTION_API = {
+  speakerDetectionTest: `${API_BASE}/attribution/speaker-detection-test/bind/`,
   evidence: (id: string) => `${API_BASE}/sessions/${id}/attribution/evidence/`,
   bind: (id: string) => `${API_BASE}/sessions/${id}/attribution/bind/`,
   answers: (id: string) => `${API_BASE}/sessions/${id}/attribution/answers/`,
