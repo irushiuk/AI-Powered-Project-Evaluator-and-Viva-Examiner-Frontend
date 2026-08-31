@@ -9,6 +9,18 @@ import {
 } from '@/services/physiologyService'
 
 /**
+ * Fewest beats a window may rest on and still be drawn as a heart rate.
+ *
+ * A rate computed from one or two intervals is a single artifact, not a
+ * measurement: a doubled or missed beat alone can read as 156 bpm. The
+ * analyser already refuses to JUDGE such windows (it wants 20 clean beats for
+ * variability); this stops the chart from DISPLAYING them as though they were
+ * real, which is worse than showing nothing because it invites the reader to
+ * explain a number that never happened.
+ */
+const MIN_BEATS_TO_PLOT = 5
+
+/**
  * Heart-rate arousal from the exam-station band, inside the behavioural tab.
  *
  * Renders NOTHING unless this session actually has physiological data. Only
@@ -65,7 +77,9 @@ export default function PhysiologySection({
     // for. Without a baseline every point is `usable: false`, and requiring it
     // here hid the whole chart on exactly the sessions where the raw trace is
     // the only thing left to show.
-    const values = points.filter((p) => p.hr != null).map((p) => p.hr as number)
+    const values = points
+      .filter((p) => p.hr != null && p.beats >= MIN_BEATS_TO_PLOT)
+      .map((p) => p.hr as number)
     if (!values.length) return null
     const min = Math.min(...values)
     const max = Math.max(...values)
@@ -218,7 +232,7 @@ function Trace({
     <div className="mt-4">
       <div className="flex h-14 items-end gap-px overflow-hidden rounded-lg bg-gray-50 p-1">
         {points.map((p) => {
-          if (p.hr == null) {
+          if (p.hr == null || p.beats < MIN_BEATS_TO_PLOT) {
             // A gap, drawn as a gap. Filling it with a baseline value would
             // assert a reading that was never taken. Note this tests the RATE,
             // not `usable`: a point with a real pulse but no baseline to
@@ -226,7 +240,11 @@ function Trace({
             return (
               <div
                 key={p.offset_ms}
-                title={`${p.video_timecode} — no reading (${p.reason})`}
+                title={
+                p.hr == null
+                  ? `${p.video_timecode} — no reading (${p.reason})`
+                  : `${p.video_timecode} — only ${p.beats} beat(s), too few to trust`
+              }
                 className="h-full min-w-[2px] flex-1 bg-[repeating-linear-gradient(45deg,transparent,transparent_2px,#e5e7eb_2px,#e5e7eb_4px)]"
               />
             )
