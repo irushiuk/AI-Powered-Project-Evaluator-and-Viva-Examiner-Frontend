@@ -111,6 +111,15 @@ export const CV_ANALYSIS_API = {
   summary: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/cv/summary/`,
 }
 
+// Physiological signals from the exam-station band. Physical sessions only:
+// a remote viva has no device, so these endpoints return no data there.
+export const PHYSIO_API = {
+  timeline: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/physio/timeline/`,
+  device: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/physio/device/`,
+  baseline: (sessionId: string, action: 'start' | 'stop') =>
+    `${API_BASE}/sessions/${sessionId}/physio/baseline/${action}/`,
+}
+
 export const LIVE_QUESTIONS_API = {
   ask: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/live-questions/`,
   list: (sessionId: string) => `${API_BASE}/sessions/${sessionId}/live-questions/list/`,
@@ -162,6 +171,7 @@ export default {
   CODE_ANALYSIS_API,
   SESSIONS_API,
   ATTRIBUTION_API,
+  PHYSIO_API,
   VIVA_API,
   PHYSICAL_API,
   STUDENT_API,
