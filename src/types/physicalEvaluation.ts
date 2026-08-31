@@ -54,6 +54,46 @@ export type PhysicalSessionList = {
   sessions: PhysicalSession[];
 };
 
+export type IdentityMemberStatus =
+  | "verified"
+  | "not_detected"
+  | "no_usable_enrollment";
+
+export type PhysicalIdentityBinding = {
+  binding_id?: string;
+  student_id: string | null;
+  track_ref?: string;
+  bbox?: number[] | null;
+  confidence: number;
+  identity_confidence?: number | null;
+  identity_margin?: number | null;
+  votes?: number;
+  frames_processed?: number;
+};
+
+export type PhysicalIdentityReview = {
+  complete: boolean;
+  roster: Array<{
+    student_id: string;
+    full_name: string;
+    registration_number: string;
+    status: IdentityMemberStatus;
+    confidence: number | null;
+    identity_margin: number | null;
+    votes: number;
+    bbox?: number[] | null;
+  }>;
+  bindings: PhysicalIdentityBinding[];
+  unknown_faces: PhysicalIdentityBinding[];
+  unmatched: number;
+  missing_enrollment: string[];
+  unusable_enrollment: string[];
+  frames_processed: number;
+  required_frames: number;
+  engine_version: string;
+  error?: string;
+};
+
 export type PhysicalRun = {
   id: string;
   session: PhysicalSession;
@@ -68,6 +108,11 @@ export type PhysicalRun = {
   completed_at: string | null;
   next_action?: "start_demo" | "start_viva";
   recording_upload?: PhysicalRecordingUpload | null;
+  identity_status: "pending" | "verified" | "overridden" | "not_required";
+  identity_verification: PhysicalIdentityReview | Record<string, never>;
+  identity_verified_at: string | null;
+  identity_override_at: string | null;
+  identity_override_reason: string;
 };
 
 export type PhysicalRecordingUpload = {
