@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useCallback, useState, useEffect } from "react"
 import Link from "next/link"
 import { sessionService } from "@/services/sessionService"
 import { physicalEvaluationService } from "@/services/physicalEvaluationService"
@@ -8,7 +8,6 @@ import type { EvaluationMode } from "@/types/project"
 import {
   Session,
   AutoSchedulePayload,
-  ManualSchedulePayload,
   ManualSessionEntry,
   DateRange,
   UpdateSessionPayload,
@@ -26,6 +25,8 @@ import {
   Building2,
   LockKeyhole,
   ShieldCheck,
+  Loader2,
+  AlertCircle,
 } from "lucide-react"
 import { toast } from "sonner"
 import { formatColomboDateTime, formatColomboTime, getColomboTimezoneLabel } from "@/utils/datetime"
@@ -52,22 +53,32 @@ export default function SessionsTab({
   const [resetting, setResetting] = useState(false)
   const [openingPhysicalPanel, setOpeningPhysicalPanel] = useState(false)
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     try {
       const data = await sessionService.getAll(projectId)
       setSessions(data)
-    } catch (err) {
+    } catch {
       toast.error("Failed to load sessions")
-      console.error("SessionsTab error:", err)
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
 
   useEffect(() => {
     if (!projectId) return
     refresh()
-  }, [projectId])
+  }, [projectId, refresh])
+
+  useEffect(() => {
+    const recordingInProgress = sessions.some((session) =>
+      ["capturing", "uploading", "finalizing"].includes(
+        session.recording_status || "",
+      ),
+    )
+    if (evaluationMode !== "physical" || !recordingInProgress) return
+    const timer = window.setInterval(() => void refresh(), 5000)
+    return () => window.clearInterval(timer)
+  }, [evaluationMode, refresh, sessions])
 
   const handleReset = async () => {
     setResetting(true)
@@ -211,6 +222,18 @@ export default function SessionsTab({
                 <span className={`text-xs px-2 py-0.5 rounded-full border font-medium capitalize ${statusStyles[displayStatus] ?? statusStyles.pending}`}>
                   {displayStatus.replace("_", " ")}
                 </span>
+                {["capturing", "uploading", "finalizing"].includes(
+                  session.recording_status || "",
+                ) && (
+                  <span className="flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Recording uploading
+                  </span>
+                )}
+                {session.recording_status === "failed" && (
+                  <span className="flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                    <AlertCircle className="h-3 w-3" /> Recording upload failed
+                  </span>
+                )}
                 {displayStatus === "scheduled" && (
                   <button
                     onClick={() => setEditingSession(session)}
@@ -573,17 +596,20 @@ function AutoScheduleModal({
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1.5 block">
-                Viva Weight (%)
+                Session Score Maximum
               </label>
               <input
                 type="number"
-                placeholder="e.g. 20"
+                placeholder="e.g. 40"
                 min={1}
                 max={100}
                 value={vivaWeightPercentage}
                 onChange={(e) => setVivaWeightPercentage(e.target.value)}
                 className={`w-full ${inputBase}`}
               />
+              <p className="mt-1 text-xs text-gray-500">
+                The result will be shown against this value, for example 32.5 / 40.
+              </p>
             </div>
           </div>
         </div>
@@ -794,17 +820,20 @@ function ManualScheduleModal({
             </div>
             <div>
               <label className="text-xs font-medium text-gray-700 mb-1.5 block">
-                Viva Weight (%)
+                Session Score Maximum
               </label>
               <input
                 type="number"
-                placeholder="e.g. 20"
+                placeholder="e.g. 40"
                 min={1}
                 max={100}
                 value={vivaWeightPercentage}
                 onChange={(e) => setVivaWeightPercentage(e.target.value)}
                 className={`w-full ${inputBase}`}
               />
+              <p className="mt-1 text-xs text-gray-500">
+                The result will be shown against this value, for example 24 / 30.
+              </p>
             </div>
           </div>
         </div>

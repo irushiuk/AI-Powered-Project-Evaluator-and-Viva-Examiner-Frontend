@@ -6,6 +6,7 @@ export type RubricCriteria = {
   max_score: number
   weight_in_category: number | null
   description: string | null
+  is_individual?: boolean
 }
 
 export type RubricCategory = {
@@ -43,7 +44,8 @@ export type TranscriptItem = {
 
 export type SessionResults = {
   score: number
-  grade: string
+  scoreMaximum: number
+  scorePercentage?: number
   scores_status?: string
   summary: string
   submission: {

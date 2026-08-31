@@ -56,7 +56,13 @@ export interface CvQuestionMarker {
 }
 
 export interface CvSummaryResponse {
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status:
+    | 'recording_uploading'
+    | 'recording_failed'
+    | 'pending'
+    | 'processing'
+    | 'completed'
+    | 'failed'
   artifact: CvArtifact | null
   recording_url: string
   playback_url: string | null

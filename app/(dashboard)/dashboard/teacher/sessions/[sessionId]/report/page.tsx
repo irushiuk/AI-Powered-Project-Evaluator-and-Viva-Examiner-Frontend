@@ -280,6 +280,15 @@ export default function SessionDetailedReportPage() {
     : isGroupSession
       ? null
       : data.report
+  const scoreMaximum = Number(
+    report?.viva_weight_percentage ?? session.viva_weight_percentage ?? 100,
+  )
+  const weightedScore = Number(
+    Number(
+      report?.scaled_score
+      ?? ((Number(report?.total_final_score ?? 0) * scoreMaximum) / 100),
+    ).toFixed(2),
+  )
   const selectedStudentName = report?.student_name || "Selected Student"
   const reportEntries: [string, any][] = reports ? Object.entries(reports) : []
   const allReportsApproved = reportEntries.length > 0
@@ -337,8 +346,8 @@ export default function SessionDetailedReportPage() {
           report: prev.report ? { ...prev.report, scores_status: 'approved' } : { scores_status: 'approved' }
         };
       });
-      // Optional: Since approval triggers a background report generation, we can reload the page data
-      // after a few seconds to get the final grades.
+      // Approval triggers background report generation, so reload shortly
+      // afterwards to retrieve the finalized weighted scores.
       setTimeout(() => {
         window.location.reload();
       }, 3000);
@@ -456,17 +465,17 @@ export default function SessionDetailedReportPage() {
                 </AlertDialogContent>
               </AlertDialog>
             )}
-            {report && report.grade && (
+            {report && (
               <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 text-center min-w-[120px]">
                 <div className="text-xs font-semibold text-blue-600 uppercase tracking-wide">
-                  {isGroupSession ? `${selectedStudentName}'s Result` : "Final Grade"}
+                  {isGroupSession ? `${selectedStudentName}'s Result` : "Final Score"}
                 </div>
-                <div className="text-3xl font-black text-blue-700 mt-1">{report.grade}</div>
-                {report.viva_weight_percentage !== undefined && report.viva_weight_percentage !== 100 ? (
-                  <div className="text-xs text-blue-500 mt-1">Score: {report.scaled_score} / {report.viva_weight_percentage}</div>
-                ) : (
-                  <div className="text-xs text-blue-500 mt-1">Score: {report.total_final_score}%</div>
-                )}
+                <div className="mt-1 text-3xl font-black text-blue-700">
+                  {weightedScore} / {scoreMaximum}
+                </div>
+                <div className="mt-1 text-xs text-blue-500">
+                  Viva contribution to the project result
+                </div>
               </div>
             )}
             {isGroupOverview && (

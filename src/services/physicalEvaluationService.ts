@@ -104,6 +104,21 @@ async function kioskFetch(input: RequestInfo | URL, init: RequestInit = {}) {
   return response;
 }
 
+async function recordingFetch(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  recordingToken?: string,
+) {
+  if (!recordingToken) return kioskFetch(input, init);
+  const headers = new Headers(init.headers);
+  headers.set("X-Physical-Recording-Token", recordingToken);
+  return fetch(input, {
+    ...init,
+    headers,
+    credentials: "omit",
+  });
+}
+
 export const physicalEvaluationService = {
   hasKioskToken(): boolean {
     return Boolean(getToken());
@@ -187,8 +202,9 @@ export const physicalEvaluationService = {
 
   async getCurrentQuestion(
     sessionId: string,
+    signal?: AbortSignal,
   ): Promise<CurrentQuestionResponse> {
-    const response = await kioskFetch(VIVA_API.currentQuestion(sessionId));
+    const response = await kioskFetch(VIVA_API.currentQuestion(sessionId), { signal });
     return readJson(response, "Failed to load the current viva question");
   },
 
@@ -227,15 +243,18 @@ export const physicalEvaluationService = {
     chunkIndex: number,
     chunk: Blob,
     mimeType: string,
+    signal?: AbortSignal,
+    recordingToken?: string,
   ): Promise<PhysicalRecordingUpload> {
     const extension = mimeType.includes("mp4") ? "mp4" : "webm";
     const formData = new FormData();
     formData.append("chunk", chunk, `chunk-${chunkIndex}.${extension}`);
     formData.append("mime_type", mimeType);
     formData.append("extension", extension);
-    const response = await kioskFetch(
+    const response = await recordingFetch(
       PHYSICAL_API.recordingChunk(sessionId, chunkIndex),
-      { method: "POST", body: formData },
+      { method: "POST", body: formData, signal },
+      recordingToken,
     );
     return readJson(
       response,
@@ -248,8 +267,11 @@ export const physicalEvaluationService = {
     totalChunks: number,
     durationSeconds: number,
     mimeType: string,
+    signal?: AbortSignal,
+    deferCommit = false,
+    recordingToken?: string,
   ): Promise<PhysicalRecordingUpload> {
-    const response = await kioskFetch(
+    const response = await recordingFetch(
       PHYSICAL_API.finalizeRecording(sessionId),
       {
         method: "POST",
@@ -259,16 +281,25 @@ export const physicalEvaluationService = {
           duration_seconds: durationSeconds,
           mime_type: mimeType,
           extension: mimeType.includes("mp4") ? "mp4" : "webm",
+          defer_commit: deferCommit,
         }),
+        signal,
       },
+      recordingToken,
     );
     return readJson(response, "Failed to finish the physical evaluation");
   },
 
   async getRecordingStatus(
     sessionId: string,
+    signal?: AbortSignal,
+    recordingToken?: string,
   ): Promise<PhysicalRecordingUpload> {
-    const response = await kioskFetch(PHYSICAL_API.recordingStatus(sessionId));
+    const response = await recordingFetch(
+      PHYSICAL_API.recordingStatus(sessionId),
+      { signal },
+      recordingToken,
+    );
     return readJson(response, "Failed to load recording upload status");
   },
 

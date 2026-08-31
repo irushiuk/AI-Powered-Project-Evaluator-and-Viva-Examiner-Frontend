@@ -104,7 +104,7 @@ export const MOCK_SESSIONS: Record<string, StudentSession> = {
     results: {
       transcript: [],
       score: 92,
-      grade: 'A',
+      scoreMaximum: 100,
       summary:
         'Excellent project execution with outstanding code quality and innovative features. The application demonstrates strong understanding of full-stack development principles.',
       submission: {
@@ -166,7 +166,7 @@ export const MOCK_SESSIONS: Record<string, StudentSession> = {
     results: {
       transcript: [],
       score: 88,
-      grade: 'A',
+      scoreMaximum: 100,
       summary:
         'Strong implementation with good model optimization and insightful analysis.',
       submission: {
@@ -217,7 +217,7 @@ export const MOCK_SESSIONS: Record<string, StudentSession> = {
     results: {
       transcript: [],
       score: 85,
-      grade: 'A',
+      scoreMaximum: 100,
       summary: 'Great mobile app implementation with good UI/UX design.',
       submission: {
         repo: 'https://github.com/username/mobile-app',

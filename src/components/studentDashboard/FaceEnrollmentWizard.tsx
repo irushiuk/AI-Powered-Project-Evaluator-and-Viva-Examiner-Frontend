@@ -12,11 +12,14 @@ import {
 
 const WASM = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm'
 const MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
+const AUTO_CHECK_INTERVAL_MS = 140
+const AUTO_HOLD_MS = 900
+const AUTO_STEP_COOLDOWN_MS = 1100
 
 const STEPS = [
   { title: 'Look straight', detail: 'Keep a neutral expression and look at the camera.' },
-  { title: 'Turn slightly left', detail: 'Keep both eyes visible and hold still.' },
-  { title: 'Turn slightly right', detail: 'Use the opposite side from the previous sample.' },
+  { title: 'Turn slightly to one side', detail: 'Keep both eyes visible and hold still.' },
+  { title: 'Turn to the other side', detail: 'Use the opposite side from the previous sample.' },
   { title: 'Raise your chin slightly', detail: 'Only a small upward angle is needed.' },
   { title: 'Return to centre', detail: 'Look straight again with a natural expression.' },
 ]
@@ -38,11 +41,17 @@ export default function FaceEnrollmentWizard({
   const streamRef = useRef<MediaStream | null>(null)
   const landmarkerRef = useRef<FaceLandmarker | null>(null)
   const samplesRef = useRef<CapturedSample[]>([])
+  const captureLockRef = useRef(false)
+  const savingRef = useRef(false)
+  const stableSinceRef = useRef<number | null>(null)
+  const stableMetricsRef = useRef<EnrollmentFrameMetrics | null>(null)
+  const cooldownUntilRef = useRef(0)
   const [samples, setSamples] = useState<CapturedSample[]>([])
   const [cameraReady, setCameraReady] = useState(false)
   const [modelReady, setModelReady] = useState(false)
   const [checking, setChecking] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [holdProgress, setHoldProgress] = useState(0)
   const [message, setMessage] = useState('Starting camera and face quality checks…')
   const [error, setError] = useState('')
 
@@ -51,6 +60,10 @@ export default function FaceEnrollmentWizard({
     streamRef.current = null
     landmarkerRef.current?.close()
     landmarkerRef.current = null
+    captureLockRef.current = false
+    savingRef.current = false
+    stableSinceRef.current = null
+    stableMetricsRef.current = null
     samplesRef.current.forEach((sample) => URL.revokeObjectURL(sample.preview))
     samplesRef.current = []
   }, [])
@@ -97,7 +110,8 @@ export default function FaceEnrollmentWizard({
         }
         landmarkerRef.current = landmarker
         setModelReady(true)
-        setMessage('Position your face inside the guide.')
+        cooldownUntilRef.current = performance.now() + 600
+        setMessage('Position your face inside the guide. Capture will happen automatically.')
       } catch (reason) {
         setError(
           reason instanceof DOMException && reason.name === 'NotAllowedError'
@@ -113,69 +127,174 @@ export default function FaceEnrollmentWizard({
     }
   }, [stop])
 
-  async function capture() {
+  const evaluateCurrentFrame = useCallback(() => {
     const video = videoRef.current
     const landmarker = landmarkerRef.current
     if (!video || !video.videoWidth || !landmarker || !cameraReady) {
-      setError('The camera and face checks are still starting.')
-      return
+      return { ok: false as const, message: 'The camera and face checks are still starting.' }
     }
 
+    const result = landmarker.detectForVideo(video, performance.now())
+    if (result.faceLandmarks.length !== 1) {
+      return {
+        ok: false as const,
+        message: result.faceLandmarks.length > 1
+          ? 'Only you should be visible during face registration.'
+          : 'No clear face detected. Face the camera and improve the lighting.',
+      }
+    }
+
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const context = canvas.getContext('2d')
+    if (!context) return { ok: false as const, message: 'Could not read the camera frame.' }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+    const currentSamples = samplesRef.current
+    const quality = assessEnrollmentFrame(
+      result.faceLandmarks[0],
+      canvas,
+      currentSamples.length,
+      currentSamples.map((sample) => sample.metrics),
+    )
+    if (!quality.ok) return quality
+    return { ok: true as const, canvas, metrics: quality.metrics }
+  }, [cameraReady])
+
+  const saveVerifiedSample = useCallback(async (
+    canvas: HTMLCanvasElement,
+    metrics: EnrollmentFrameMetrics,
+  ) => {
+    const previous = samplesRef.current
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', .92),
+    )
+    if (!blob) throw new Error('Could not capture this sample.')
+    const next = [
+      ...previous,
+      { blob, preview: URL.createObjectURL(blob), metrics },
+    ]
+    samplesRef.current = next
+    setSamples(next)
+    setHoldProgress(0)
+
+    if (next.length === STEPS.length) {
+      savingRef.current = true
+      setSaving(true)
+      setMessage('All five views passed. Saving your registration…')
+      try {
+        const state = await facePhotoService.upload(next.map((sample) => sample.blob))
+        onSaved(state)
+      } catch (reason) {
+        URL.revokeObjectURL(next[next.length - 1].preview)
+        samplesRef.current = previous
+        setSamples(previous)
+        throw reason
+      } finally {
+        savingRef.current = false
+        setSaving(false)
+      }
+    } else {
+      setMessage(`View ${next.length} captured successfully. Get ready for the next instruction.`)
+    }
+  }, [onSaved])
+
+  useEffect(() => {
+    if (!cameraReady || !modelReady) return
+    let cancelled = false
+    let animationFrame = 0
+    let lastCheckedAt = 0
+
+    const resetStability = () => {
+      stableSinceRef.current = null
+      stableMetricsRef.current = null
+      setHoldProgress(0)
+    }
+
+    const check = async (now: number) => {
+      if (
+        cancelled
+        || captureLockRef.current
+        || savingRef.current
+        || now < cooldownUntilRef.current
+        || now - lastCheckedAt < AUTO_CHECK_INTERVAL_MS
+      ) return
+      lastCheckedAt = now
+      captureLockRef.current = true
+      try {
+        const frame = evaluateCurrentFrame()
+        if (!frame.ok) {
+          resetStability()
+          setMessage(frame.message)
+          return
+        }
+
+        const previousMetrics = stableMetricsRef.current
+        const moved = previousMetrics && (
+          Math.abs(frame.metrics.noseX - previousMetrics.noseX) > .028
+          || Math.abs(frame.metrics.noseY - previousMetrics.noseY) > .028
+        )
+        if (moved || stableSinceRef.current === null) {
+          stableSinceRef.current = now
+          stableMetricsRef.current = frame.metrics
+          setHoldProgress(0)
+          setMessage('Correct position found. Hold still…')
+          return
+        }
+
+        stableMetricsRef.current = frame.metrics
+        const elapsed = now - stableSinceRef.current
+        const progress = Math.min(100, Math.round((elapsed / AUTO_HOLD_MS) * 100))
+        setHoldProgress(progress)
+        setMessage(progress < 100 ? 'Hold still — capturing automatically…' : 'Capturing…')
+        if (elapsed < AUTO_HOLD_MS) return
+
+        resetStability()
+        setError('')
+        await saveVerifiedSample(frame.canvas, frame.metrics)
+        cooldownUntilRef.current = performance.now() + AUTO_STEP_COOLDOWN_MS
+      } catch (reason) {
+        resetStability()
+        setError(reason instanceof Error ? reason.message : 'Automatic capture failed. Try the manual button.')
+        cooldownUntilRef.current = performance.now() + AUTO_STEP_COOLDOWN_MS
+      } finally {
+        captureLockRef.current = false
+      }
+    }
+
+    const loop = (now: number) => {
+      if (cancelled) return
+      animationFrame = requestAnimationFrame(loop)
+      void check(now)
+    }
+    animationFrame = requestAnimationFrame(loop)
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(animationFrame)
+    }
+  }, [cameraReady, modelReady, evaluateCurrentFrame, saveVerifiedSample])
+
+  async function capture() {
+    if (captureLockRef.current || savingRef.current) return
+    captureLockRef.current = true
     setChecking(true)
     setError('')
     try {
-      const result = landmarker.detectForVideo(video, performance.now())
-      if (result.faceLandmarks.length !== 1) {
-        setError(
-          result.faceLandmarks.length > 1
-            ? 'Only you should be visible during face registration.'
-            : 'No clear face was detected. Face the camera and improve the lighting.',
-        )
+      const frame = evaluateCurrentFrame()
+      if (!frame.ok) {
+        setError(frame.message)
         return
       }
-
-      const canvas = document.createElement('canvas')
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-      const context = canvas.getContext('2d')
-      if (!context) throw new Error('Could not read the camera frame.')
-      context.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-      const quality = assessEnrollmentFrame(
-        result.faceLandmarks[0],
-        canvas,
-        samples.length,
-        samples.map((sample) => sample.metrics),
-      )
-      if (!quality.ok) {
-        setError(quality.message)
-        return
-      }
-
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, 'image/jpeg', .92),
-      )
-      if (!blob) throw new Error('Could not capture this sample.')
-      const next = [
-        ...samples,
-        { blob, preview: URL.createObjectURL(blob), metrics: quality.metrics },
-      ]
-      samplesRef.current = next
-      setSamples(next)
-
-      if (next.length === STEPS.length) {
-        setSaving(true)
-        setMessage('Saving five verified samples…')
-        const state = await facePhotoService.upload(next.map((sample) => sample.blob))
-        onSaved(state)
-      } else {
-        setMessage(`Sample ${next.length} passed all quality checks.`)
-      }
+      stableSinceRef.current = null
+      stableMetricsRef.current = null
+      await saveVerifiedSample(frame.canvas, frame.metrics)
+      cooldownUntilRef.current = performance.now() + AUTO_STEP_COOLDOWN_MS
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not capture this sample.')
     } finally {
+      captureLockRef.current = false
       setChecking(false)
-      setSaving(false)
     }
   }
 
@@ -183,8 +302,12 @@ export default function FaceEnrollmentWizard({
     samples.forEach((sample) => URL.revokeObjectURL(sample.preview))
     samplesRef.current = []
     setSamples([])
+    stableSinceRef.current = null
+    stableMetricsRef.current = null
+    cooldownUntilRef.current = performance.now() + 600
+    setHoldProgress(0)
     setError('')
-    setMessage('Position your face inside the guide.')
+    setMessage('Position your face inside the guide. Capture will happen automatically.')
   }
 
   const step = STEPS[Math.min(samples.length, STEPS.length - 1)]
@@ -223,6 +346,9 @@ export default function FaceEnrollmentWizard({
           <div className="absolute bottom-3 left-3 rounded-full bg-slate-950/75 px-3 py-1 text-xs font-medium text-white backdrop-blur">
             {ready ? message : 'Loading face quality checks…'}
           </div>
+          <div className="absolute right-3 top-3 rounded-full bg-emerald-500/90 px-3 py-1 text-xs font-semibold text-white shadow-sm backdrop-blur">
+            Automatic capture on
+          </div>
         </div>
 
         <div className="flex flex-col justify-between gap-4">
@@ -239,10 +365,23 @@ export default function FaceEnrollmentWizard({
 
           {error && <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{error}</p>}
 
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+            <div className="mb-2 flex items-center justify-between text-xs font-medium text-blue-800">
+              <span>Hold the requested position</span>
+              <span>{holdProgress}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-blue-100">
+              <div
+                className="h-full rounded-full bg-blue-600 transition-[width] duration-150"
+                style={{ width: `${holdProgress}%` }}
+              />
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={capture} disabled={!ready || checking || saving}>
+            <Button type="button" variant="outline" onClick={capture} disabled={!ready || checking || saving}>
               {checking || saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-              {saving ? 'Saving registration…' : samples.length === STEPS.length - 1 ? 'Capture and register' : 'Capture sample'}
+              {saving ? 'Saving registration…' : 'Capture manually'}
             </Button>
             {samples.length > 0 && (
               <Button type="button" variant="outline" onClick={restart} disabled={saving}>
