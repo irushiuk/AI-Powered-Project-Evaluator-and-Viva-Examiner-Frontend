@@ -32,6 +32,8 @@ type SubmissionDetail = {
 
 type VivaSessionReport = {
   overall_score: number
+  viva_weight_percentage?: number
+  scaled_score?: number
   per_criterion_scores: Record<string, number>
   scores_status?: string
   xai_report?: {
@@ -54,14 +56,6 @@ type SonarSummary = {
   sonar_dashboard?: {
     maintainability?: { rating?: string }
   }
-}
-
-function scoreToGrade(score: number) {
-  if (score >= 85) return 'A'
-  if (score >= 70) return 'B'
-  if (score >= 60) return 'C'
-  if (score >= 50) return 'D'
-  return 'F'
 }
 
 function formatDuplication(value: unknown) {
@@ -211,10 +205,15 @@ export const serverSessionService = {
     const dashboardMaintainability = sonarSummary?.sonar_dashboard?.maintainability?.rating
 
     const score100 = Number(((report.overall_score ?? 0) * 100).toFixed(1))
+    const scoreMaximum = Number(report.viva_weight_percentage ?? 100)
+    const weightedScore = Number(
+      (report.scaled_score ?? (score100 * scoreMaximum) / 100).toFixed(2),
+    )
 
     return {
-      score: score100,
-      grade: scoreToGrade(score100),
+      score: weightedScore,
+      scoreMaximum,
+      scorePercentage: score100,
       scores_status: report.scores_status || 'draft',
       summary:
         report.xai_report?.overall_summary ||

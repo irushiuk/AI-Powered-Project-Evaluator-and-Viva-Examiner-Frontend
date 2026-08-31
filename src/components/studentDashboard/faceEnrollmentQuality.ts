@@ -84,8 +84,20 @@ export function assessEnrollmentFrame(
       return { ok: false, message: 'Turn toward the opposite side for this sample.' }
     }
   }
-  if (stepIndex === 4 && front && Math.abs(noseX - front.noseX) > .1) {
-    return { ok: false, message: 'Return to a front-facing position for the final sample.' }
+  if (stepIndex === 3 && front) {
+    if (Math.abs(noseX - front.noseX) > .1) {
+      return { ok: false, message: 'Face the camera, then raise your chin slightly.' }
+    }
+    if (Math.abs(noseY - front.noseY) < .025) {
+      return { ok: false, message: 'Raise your chin a little more and keep looking toward the camera.' }
+    }
+  }
+  if (
+    stepIndex === 4
+    && front
+    && (Math.abs(noseX - front.noseX) > .1 || Math.abs(noseY - front.noseY) > .07)
+  ) {
+    return { ok: false, message: 'Return to the same straight, neutral position as your first sample.' }
   }
 
   return { ok: true, metrics: { noseX, noseY } }
