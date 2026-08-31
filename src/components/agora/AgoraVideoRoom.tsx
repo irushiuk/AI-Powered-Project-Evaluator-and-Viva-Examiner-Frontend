@@ -8,6 +8,7 @@ import type {
   ILocalAudioTrack,
   ILocalVideoTrack,
   IMicrophoneAudioTrack,
+  IRemoteAudioTrack,
 } from 'agora-rtc-sdk-ng'
 import { agoraService } from '@/services/agoraService'
 import { ActiveSpeakerCollector } from '@/services/attributionService'
@@ -43,6 +44,9 @@ export interface AgoraVideoRoomProps {
   initialCamOff?: boolean
   /** If true, hides the default red PhoneOff end call button. */
   hideEndCallButton?: boolean
+  /** Reports real remote speech so local answer transcription can pause and
+   * never capture another participant through the speakers. */
+  onRemoteAudioActivity?: (active: boolean) => void
 }
 
 type DocumentPictureInPictureApi = {
@@ -65,17 +69,19 @@ function closeScreenTrack(track: ScreenTrack) {
   }
 }
 
-export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle, onLocalTracks, remoteJoinNotice, onScreenShareChange, initialMute, initialCamOff, hideEndCallButton }: AgoraVideoRoomProps) {
+export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle, onLocalTracks, remoteJoinNotice, onScreenShareChange, initialMute, initialCamOff, hideEndCallButton, onRemoteAudioActivity }: AgoraVideoRoomProps) {
   const [localVideoTrack, setLocalVideoTrack] = useState<ICameraVideoTrack | null>(null)
   // Refs keep the join effect's dependency list unchanged ([sessionId]).
   const onLocalTracksRef = useRef(onLocalTracks)
   const remoteJoinNoticeRef = useRef(remoteJoinNotice)
   const onScreenShareChangeRef = useRef(onScreenShareChange)
+  const onRemoteAudioActivityRef = useRef(onRemoteAudioActivity)
 
   useEffect(() => {
     onLocalTracksRef.current = onLocalTracks
     remoteJoinNoticeRef.current = remoteJoinNotice
     onScreenShareChangeRef.current = onScreenShareChange
+    onRemoteAudioActivityRef.current = onRemoteAudioActivity
   })
   const noticedUidsRef = useRef<Set<string | number>>(new Set())
   const [screenTrack, setScreenTrack] = useState<ScreenTrack>(null)
@@ -188,6 +194,10 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
 
   useEffect(() => {
     let active = true
+    const remoteAudioTracks = new Map<string | number, IRemoteAudioTrack>()
+    let remoteAudioMonitorId: number | null = null
+    let remoteAudioWasActive = false
+    let remoteAudioLastHeardAt = 0
 
     const initAgora = async () => {
       try {
@@ -219,6 +229,25 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         // ── Create a fresh client ──────────────────────────────────────────
         const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
         clientRef.current = client
+
+        // Poll the decoded remote tracks directly. This reacts much faster
+        // than Agora's volume-indicator event and lets the student speech
+        // recognizer stop before room audio can echo into an answer.
+        remoteAudioMonitorId = window.setInterval(() => {
+          const heardNow = [...remoteAudioTracks.values()].some((track) => {
+            try {
+              return track.getVolumeLevel() >= 0.015
+            } catch {
+              return false
+            }
+          })
+          if (heardNow) remoteAudioLastHeardAt = Date.now()
+          const remoteActive = Date.now() - remoteAudioLastHeardAt < 600
+          if (remoteActive !== remoteAudioWasActive) {
+            remoteAudioWasActive = remoteActive
+            onRemoteAudioActivityRef.current?.(remoteActive)
+          }
+        }, 100)
 
         // Fetch token and roster from backend
         const credentials = await agoraService.getAgoraToken(sessionId)
@@ -276,7 +305,10 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
             })
           }
           if (mediaType === 'audio') {
-            user.audioTrack?.play()
+            if (user.audioTrack) {
+              remoteAudioTracks.set(user.uid, user.audioTrack)
+              user.audioTrack.play()
+            }
           }
         })
 
@@ -285,9 +317,11 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
             // Keep the user in the roster, but clear the videoTrack so the UI displays the avatar placeholder
             setRemoteUsers((prev) => prev.map((u) => u.uid === user.uid ? { ...u, videoTrack: undefined } : u))
           }
+          if (mediaType === 'audio') remoteAudioTracks.delete(user.uid)
         })
 
         client.on('user-left', (user) => {
+          remoteAudioTracks.delete(user.uid)
           setRemoteUsers((prev) => prev.filter((u) => u.uid !== user.uid))
           setPinnedUid((prev) => (prev === user.uid ? null : prev))
         })
@@ -402,6 +436,12 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
 
     return () => {
       active = false
+      if (remoteAudioMonitorId !== null) {
+        window.clearInterval(remoteAudioMonitorId)
+        remoteAudioMonitorId = null
+      }
+      remoteAudioTracks.clear()
+      if (remoteAudioWasActive) onRemoteAudioActivityRef.current?.(false)
       // Fire-and-forget cleanup (the NEXT mount's initAgora will await cleanup before proceeding)
       const cleanup = async () => {
         if (speakerCollectorRef.current) {
