@@ -126,7 +126,21 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
     )
     return Math.max(1000, lastFlag, lastQuestion, lastSpeech)
   }, [allFlags, artifact?.timeline, questions])
-  const timelineDurationMs = videoDurationMs || inferredDurationMs
+  const expectedDurationMs = Math.max(0, (summary?.duration_seconds ?? 0) * 1000)
+  const timelineDurationMs = Math.max(
+    expectedDurationMs,
+    Number.isFinite(videoDurationMs) ? videoDurationMs : 0,
+    inferredDurationMs,
+  )
+
+  function handleLoadedMetadata(video: HTMLVideoElement) {
+    const reportedSeconds = video.duration
+    if (Number.isFinite(reportedSeconds) && reportedSeconds > 0) {
+      setVideoDurationMs(Math.max(reportedSeconds * 1000, expectedDurationMs))
+    } else {
+      setVideoDurationMs(Math.max(expectedDurationMs, inferredDurationMs))
+    }
+  }
 
   // The question on screen at the current playhead = the last one asked at or
   // before it.
@@ -366,7 +380,13 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
                     src={summary.playback_url}
                     controls
                     preload="metadata"
-                    onLoadedMetadata={(event) => setVideoDurationMs(event.currentTarget.duration * 1000)}
+                    onLoadedMetadata={(event) => handleLoadedMetadata(event.currentTarget)}
+                    onDurationChange={(event) => {
+                      const duration = event.currentTarget.duration
+                      if (Number.isFinite(duration) && duration > 0) {
+                        setVideoDurationMs(Math.max(duration * 1000, expectedDurationMs))
+                      }
+                    }}
                     onTimeUpdate={handleTimeUpdate}
                     className="aspect-video w-full bg-black"
                   />
