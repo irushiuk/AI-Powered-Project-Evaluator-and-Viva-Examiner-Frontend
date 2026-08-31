@@ -25,6 +25,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import PhysioBandPanel from "@/components/physicalEvaluation/PhysioBandPanel";
 import { physicalEvaluationService } from "@/services/physicalEvaluationService";
 import type {
   PhysicalRun,
@@ -895,6 +896,13 @@ export default function PhysicalKiosk() {
                 </>
               )}
             </Button>
+
+            {/* Band setup lives here because both steps must happen BEFORE
+                questioning starts: an unbound band records nothing, and a
+                baseline taken during the viva would already be elevated. */}
+            {activeSession && (
+              <PhysioBandPanel sessionId={activeSession.session_id} />
+            )}
           </div>
         </EvaluationShell>
       )}

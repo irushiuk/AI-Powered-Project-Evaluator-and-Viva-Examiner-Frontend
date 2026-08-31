@@ -1,4 +1,9 @@
-import { ATTRIBUTION_API, PHYSICAL_API, VIVA_API } from "@/constants/api.constant";
+import {
+  ATTRIBUTION_API,
+  PHYSICAL_API,
+  PHYSIO_API,
+  VIVA_API,
+} from "@/constants/api.constant";
 import type {
   CurrentQuestionResponse,
   KioskOpenResponse,
@@ -10,6 +15,34 @@ import type {
   StartVivaResponse,
 } from "@/types/physicalEvaluation";
 import apiFetch from "./apiClient";
+
+export interface PhysioSignal {
+  /** Beats are arriving right now, with the clip reporting contact. */
+  live: boolean;
+  contact: boolean;
+  recent_samples: number;
+  recent_beats: number;
+  last_bpm: number | null;
+}
+
+export interface PhysioDeviceState {
+  device_id: string | null;
+  student_id: string | null;
+  student_name: string | null;
+  battery_pct: number | null;
+  signal: PhysioSignal | null;
+  /** none | capturing | ready | unusable — drives the panel's state machine. */
+  baseline_state: 'none' | 'capturing' | 'ready' | 'unusable';
+  roster: { student_id: string; name: string }[];
+}
+
+export interface PhysioBaselineResult {
+  hr_mean: number | null;
+  rmssd: number | null;
+  beat_count: number;
+  quality: number;
+  usable: boolean;
+}
 
 const KIOSK_TOKEN_KEY = "vivasense.physical-kiosk-token";
 
@@ -285,6 +318,59 @@ export const physicalEvaluationService = {
     } catch {
       return 0;
     }
+  },
+
+  /**
+   * Heart-rate band setup. Physical sessions only.
+   *
+   * Binding is what makes a sample attributable: the backend refuses an
+   * unbound stream rather than guessing whose pulse it is, so nothing is
+   * recorded until this is called.
+   */
+  async getPhysioDevice(sessionId: string): Promise<PhysioDeviceState | null> {
+    try {
+      const response = await kioskFetch(PHYSIO_API.device(sessionId));
+      if (!response.ok) return null;
+      const payload = await response.json().catch(() => null);
+      return payload?.data ?? null;
+    } catch {
+      return null;
+    }
+  },
+
+  async bindPhysioDevice(
+    sessionId: string,
+    deviceId: string,
+    studentId?: string,
+  ): Promise<{ student_name: string }> {
+    const response = await kioskFetch(PHYSIO_API.device(sessionId), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        device_id: deviceId,
+        ...(studentId ? { student_id: studentId } : {}),
+      }),
+    });
+    return readJson(response, "Failed to assign the band");
+  },
+
+  /**
+   * Opens the calm window. Everything the examiner later sees is expressed
+   * relative to the resting values measured here, so a session without it
+   * yields raw heart rate and no arousal reading at all.
+   */
+  async startBaseline(sessionId: string): Promise<{ started_at: string }> {
+    const response = await kioskFetch(PHYSIO_API.baseline(sessionId, "start"), {
+      method: "POST",
+    });
+    return readJson(response, "Failed to start the calm period");
+  },
+
+  async stopBaseline(sessionId: string): Promise<PhysioBaselineResult> {
+    const response = await kioskFetch(PHYSIO_API.baseline(sessionId, "stop"), {
+      method: "POST",
+    });
+    return readJson(response, "Failed to finish the calm period");
   },
 
   async closeKiosk(pin: string): Promise<void> {
