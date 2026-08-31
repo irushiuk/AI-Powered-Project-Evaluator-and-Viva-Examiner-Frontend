@@ -63,7 +63,12 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
   // Poll while recording finalization is creating the report, and while the
   // analysis itself is pending/running.
   useEffect(() => {
-    if (!notFound && summary?.status !== 'processing' && summary?.status !== 'pending') return
+    if (
+      !notFound
+      && summary?.status !== 'recording_uploading'
+      && summary?.status !== 'processing'
+      && summary?.status !== 'pending'
+    ) return
     const id = window.setInterval(() => void load(), 5000)
     return () => window.clearInterval(id)
   }, [notFound, summary?.status, load])
@@ -180,10 +185,28 @@ export default function BehavioralReportCard({ sessionId }: { sessionId: string 
             <Loader2 className="h-4 w-4 animate-spin" />
             Preparing the session recording for behavioral analysis…
           </div>
+        ) : summary?.status === 'recording_uploading' ? (
+          <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-800">
+            <p className="flex items-center gap-2 font-medium">
+              <Loader2 className="h-4 w-4 animate-spin" /> Recording uploading…
+            </p>
+            <p className="mt-1 text-xs leading-5 text-amber-700">
+              Session questions, answers, and scores remain available. Behavioral analysis will start automatically when the recording is ready.
+            </p>
+          </div>
         ) : summary?.status === 'processing' || summary?.status === 'pending' ? (
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <Loader2 className="w-4 h-4 animate-spin" />
             Analyzing the session recording… this can take a few minutes.
+          </div>
+        ) : summary?.status === 'recording_failed' ? (
+          <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+            <p className="flex items-center gap-1.5 font-medium">
+              <AlertTriangle className="h-4 w-4" /> Recording upload failed
+            </p>
+            <p className="mt-1 text-xs text-red-600">
+              {summary.error_message || 'The recording could not be prepared for behavioral analysis.'}
+            </p>
           </div>
         ) : summary?.status === 'failed' ? (
           <div className="text-sm space-y-2">

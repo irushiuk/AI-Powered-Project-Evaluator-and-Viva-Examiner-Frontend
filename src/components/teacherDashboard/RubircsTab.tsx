@@ -36,6 +36,7 @@ type CriteriaFormData = {
   max_score: string
   weight_in_category: string
   description: string
+  is_individual: boolean
 }
 
 const emptyCategoryForm = (): CategoryFormData => ({
@@ -49,6 +50,7 @@ const emptyCriteriaForm = (): CriteriaFormData => ({
   max_score: "",
   weight_in_category: "",
   description: "",
+  is_individual: true,
 })
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -514,6 +516,15 @@ function CriteriaRow({
           <span className="text-xs bg-blue-50 border border-blue-100 text-blue-600 px-2 py-0.5 rounded-full">
             {criteria.weight_in_category}% of category
           </span>
+          <span
+            className={`text-xs border px-2 py-0.5 rounded-full ${
+              criteria.is_individual
+                ? "bg-indigo-50 border-indigo-100 text-indigo-700"
+                : "bg-emerald-50 border-emerald-100 text-emerald-700"
+            }`}
+          >
+            {criteria.is_individual ? "Individual score" : "Shared group score"}
+          </span>
         </div>
         {criteria.description && (
           <p className="text-xs text-gray-400 mt-0.5 truncate">{criteria.description}</p>
@@ -656,6 +667,7 @@ function CriteriaModal({
           max_score: String(editing.max_score),
           weight_in_category: String(editing.weight_in_category),
           description: editing.description ?? "",
+          is_individual: editing.is_individual ?? true,
         }
       : emptyCriteriaForm()
   )
@@ -683,6 +695,7 @@ function CriteriaModal({
         max_score: parseFloat(form.max_score),
         weight_in_category: parseFloat(form.weight_in_category),
         description: form.description.trim() || undefined,
+        is_individual: form.is_individual,
       })
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "An error occurred")
@@ -748,6 +761,39 @@ function CriteriaModal({
               onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
               placeholder="What does this criterion evaluate?"
             />
+          </Field>
+
+          <Field label="Scoring scope">
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, is_individual: true }))}
+                className={`rounded-xl border p-3 text-left transition ${
+                  form.is_individual
+                    ? "border-indigo-500 bg-indigo-50 ring-1 ring-indigo-500"
+                    : "border-gray-200 bg-white hover:border-gray-300"
+                }`}
+              >
+                <span className="block text-sm font-semibold text-gray-800">Individual score</span>
+                <span className="mt-1 block text-xs text-gray-500">
+                  Score only students who answer or contribute.
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, is_individual: false }))}
+                className={`rounded-xl border p-3 text-left transition ${
+                  !form.is_individual
+                    ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500"
+                    : "border-gray-200 bg-white hover:border-gray-300"
+                }`}
+              >
+                <span className="block text-sm font-semibold text-gray-800">Shared group score</span>
+                <span className="mt-1 block text-xs text-gray-500">
+                  Give the same result to every group member.
+                </span>
+              </button>
+            </div>
           </Field>
         </div>
 

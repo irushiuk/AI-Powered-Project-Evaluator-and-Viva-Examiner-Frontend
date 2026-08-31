@@ -6,6 +6,7 @@ export type RubricCriteria = {
   max_score: number
   weight_in_category: number | null
   description: string | null
+  is_individual?: boolean
 }
 
 export type RubricCategory = {

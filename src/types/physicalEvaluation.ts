@@ -77,11 +77,13 @@ export type PhysicalRecordingUpload = {
   mime_type: string;
   expected_chunks: number | null;
   uploaded_chunks: number;
+  uploaded_chunk_indices: number[];
   duration_seconds: number | null;
   error_message: string;
   created_at: string;
   updated_at: string;
   finalized_at: string | null;
+  upload_token?: string;
 };
 
 export type PhysicalCompletion = {

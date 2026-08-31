@@ -23,11 +23,13 @@ import {
   Volume2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { physicalEvaluationService } from "@/services/physicalEvaluationService";
 import type {
   PhysicalRun,
+  PhysicalSubmitVivaAnswerResponse,
   PhysicalSession,
   PhysicalSessionList,
 } from "@/types/physicalEvaluation";
@@ -47,8 +49,102 @@ type KioskPhase =
   | "preparing"
   | "demo"
   | "viva"
+  | "finalizing"
   | "finish_error"
   | "complete";
+
+type AnswerProgress = "idle" | "evaluating" | "taking_longer";
+
+const wait = (milliseconds: number) =>
+  new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
+
+async function requestWithTimeout<T>(
+  request: (signal: AbortSignal) => Promise<T>,
+  milliseconds: number,
+  timeoutMessage: string,
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), milliseconds);
+  try {
+    return await request(controller.signal);
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error(timeoutMessage, { cause: error });
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+async function submitAnswerWithRecovery(
+  sessionId: string,
+  questionId: string,
+  answerText: string,
+  speakerId: string,
+): Promise<PhysicalSubmitVivaAnswerResponse> {
+  type SubmissionOutcome =
+    | { kind: "response"; value: PhysicalSubmitVivaAnswerResponse }
+    | { kind: "error"; error: unknown }
+    | { kind: "waiting" };
+
+  const directResult: Promise<SubmissionOutcome> = physicalEvaluationService
+    .submitAnswer(sessionId, questionId, answerText, speakerId)
+    .then((value) => ({ kind: "response" as const, value }))
+    .catch((error: unknown) => ({ kind: "error" as const, error }));
+
+  let outcome = await Promise.race<SubmissionOutcome>([
+    directResult,
+    wait(8_000).then(() => ({ kind: "waiting" as const })),
+  ]);
+  if (outcome.kind === "response") return outcome.value;
+
+  // The evaluator may commit the turn even when its HTTP response is delayed
+  // or lost. Poll read-only state instead of resubmitting the answer.
+  const recoveryDeadline = Date.now() + 120_000;
+  for (
+    let attempt = 0;
+    attempt < 55 && Date.now() < recoveryDeadline;
+    attempt += 1
+  ) {
+    try {
+      const current = await requestWithTimeout(
+        (signal) => physicalEvaluationService.getCurrentQuestion(sessionId, signal),
+        8_000,
+        "Session status check timed out.",
+      );
+      if (current.session_complete) {
+        return {
+          answer_saved: true,
+          session_complete: true,
+          message: "The final answer was saved and the viva is complete.",
+        };
+      }
+      if (current.question && current.question.question_id !== questionId) {
+        return {
+          answer_saved: true,
+          session_complete: false,
+          next_question: current.question,
+          message: "Answer submitted.",
+        };
+      }
+    } catch {
+      // A brief read failure should not cause the already-running submission
+      // to be sent twice. The next polling interval will retry safely.
+    }
+
+    if (outcome.kind === "error") {
+      throw outcome.error;
+    }
+    outcome = await Promise.race<SubmissionOutcome>([
+      directResult,
+      wait(2_000).then(() => ({ kind: "waiting" as const })),
+    ]);
+    if (outcome.kind === "response") return outcome.value;
+  }
+
+  throw new Error(
+    "Answer evaluation is taking longer than expected. Your answer may already be saved; please wait and use Retry status instead of submitting it again.",
+  );
+}
 
 type SpeechResult = {
   isFinal: boolean;
@@ -109,6 +205,7 @@ function formatDate(value: string): string {
 }
 
 export default function PhysicalKiosk() {
+  const router = useRouter();
   const [phase, setPhase] = useState<KioskPhase>("loading");
   const [panel, setPanel] = useState<PhysicalSessionList | null>(null);
   const [sessions, setSessions] = useState<PhysicalSession[]>([]);
@@ -129,6 +226,8 @@ export default function PhysicalKiosk() {
   >("idle");
   const [faceBindingError, setFaceBindingError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [answerProgress, setAnswerProgress] =
+    useState<AnswerProgress>("idle");
   const [error, setError] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
@@ -259,17 +358,9 @@ export default function PhysicalKiosk() {
     async (sessionId: string) => {
       stopSpeechRecognition();
       cancelQuestionSpeech();
+      setPhase("finalizing");
       try {
-        try {
-          await sessionRecorder.stopAndFinalize(sessionId);
-        } catch (recordingError) {
-          setError(
-            recordingError instanceof Error
-              ? `The viva was saved, but its recording could not be finalized: ${recordingError.message}`
-              : "The viva was saved, but its recording could not be finalized.",
-          );
-          await physicalEvaluationService.finishSession(sessionId);
-        }
+        await sessionRecorder.beginBackgroundFinalization(sessionId);
         stopCamera();
         await loadSessions();
         setPhase("complete");
@@ -277,8 +368,8 @@ export default function PhysicalKiosk() {
         stopCamera();
         setError(
           finalizeError instanceof Error
-            ? finalizeError.message
-            : "Could not finish the evaluation",
+            ? `The answers are saved, but the recording could not be finalized: ${finalizeError.message}`
+            : "The answers are saved, but the recording could not be finalized.",
         );
         setPhase("finish_error");
       }
@@ -287,6 +378,77 @@ export default function PhysicalKiosk() {
       loadSessions,
       cancelQuestionSpeech,
       sessionRecorder,
+      stopCamera,
+      stopSpeechRecognition,
+    ],
+  );
+
+  const recoverServerRecording = useCallback(
+    async (sessionId: string, retryFinalization: boolean) => {
+      stopSpeechRecognition();
+      cancelQuestionSpeech();
+      stopCamera();
+      setPhase("finalizing");
+      try {
+        let status = await requestWithTimeout(
+          (signal) => physicalEvaluationService.getRecordingStatus(sessionId, signal),
+          10_000,
+          "Recording status check timed out.",
+        );
+        if (retryFinalization && status.status !== "ready") {
+          const totalChunks =
+            status.expected_chunks ??
+            (status.uploaded_chunk_indices.length
+              ? Math.max(...status.uploaded_chunk_indices) + 1
+              : status.uploaded_chunks);
+          if (!totalChunks || !status.duration_seconds) {
+            throw new Error(
+              "The recording does not contain enough upload metadata to retry safely.",
+            );
+          }
+          status = await requestWithTimeout(
+            (signal) => physicalEvaluationService.finalizeChunkedRecording(
+              sessionId,
+              totalChunks,
+              status.duration_seconds!,
+              status.mime_type || "video/webm",
+              signal,
+            ),
+            30_000,
+            "Recording finalization request timed out.",
+          );
+        }
+
+        for (let attempt = 0; status.status !== "ready" && attempt < 30; attempt += 1) {
+          if (status.status === "failed") {
+            throw new Error(status.error_message || "Recording finalization failed.");
+          }
+          await wait(2_000);
+          status = await requestWithTimeout(
+            (signal) => physicalEvaluationService.getRecordingStatus(sessionId, signal),
+            10_000,
+            "Recording status check timed out.",
+          );
+        }
+        if (status.status !== "ready") {
+          throw new Error(
+            "Recording finalization is still running. Please retry status shortly.",
+          );
+        }
+        await loadSessions();
+        setPhase("complete");
+      } catch (recordingError) {
+        setError(
+          recordingError instanceof Error
+            ? `The answers are saved, but the recording is not ready: ${recordingError.message}`
+            : "The answers are saved, but the recording is not ready.",
+        );
+        setPhase("finish_error");
+      }
+    },
+    [
+      cancelQuestionSpeech,
+      loadSessions,
       stopCamera,
       stopSpeechRecognition,
     ],
@@ -388,10 +550,28 @@ export default function PhysicalKiosk() {
     async (run: PhysicalRun) => {
       setActiveSession(run.session);
       setSpeakerId(run.session.student?.student_id || "group");
+
+      if (
+        run.status === "recording_uploading" ||
+        run.status === "recording_failed"
+      ) {
+        await recoverServerRecording(
+          run.session.session_id,
+          run.status === "recording_failed",
+        );
+        return;
+      }
+
       setPhase("preparing");
       await startCamera();
       if (mediaStreamRef.current) {
-        sessionRecorder.start(run.session.session_id, mediaStreamRef.current);
+        const uploadedIndices = run.recording_upload?.uploaded_chunk_indices ?? [];
+        sessionRecorder.start(run.session.session_id, mediaStreamRef.current, {
+          nextChunkIndex: uploadedIndices.length
+            ? Math.max(...uploadedIndices) + 1
+            : run.recording_upload?.uploaded_chunks ?? 0,
+          startedAt: run.recording_started_at,
+        });
       }
 
       // Identify the room while it is still on the preparation screen. This
@@ -404,8 +584,13 @@ export default function PhysicalKiosk() {
         return;
       }
 
-      const current = await physicalEvaluationService.getCurrentQuestion(
-        run.session.session_id,
+      const current = await requestWithTimeout(
+        (signal) => physicalEvaluationService.getCurrentQuestion(
+          run.session.session_id,
+          signal,
+        ),
+        10_000,
+        "Current-question recovery timed out.",
       );
       if (current.session_complete) {
         await finalizeEvaluation(run.session.session_id);
@@ -418,7 +603,14 @@ export default function PhysicalKiosk() {
       }
       await beginViva(run.session);
     },
-    [beginViva, bindSeats, finalizeEvaluation, sessionRecorder, startCamera],
+    [
+      beginViva,
+      bindSeats,
+      finalizeEvaluation,
+      recoverServerRecording,
+      sessionRecorder,
+      startCamera,
+    ],
   );
 
   useEffect(() => {
@@ -468,6 +660,7 @@ export default function PhysicalKiosk() {
     "preparing",
     "demo",
     "viva",
+    "finalizing",
     "finish_error",
   ].includes(phase);
 
@@ -502,8 +695,8 @@ export default function PhysicalKiosk() {
     setPhase("preparing");
 
     try {
-      // Camera access starts first so it stays available throughout the demo
-      // and viva without creating a local recording or network upload.
+      // Camera access starts first; recording begins only after the backend
+      // has authorized and created this physical evaluation run.
       await startCamera();
       const run = await physicalEvaluationService.startSession(
         session.session_id,
@@ -580,11 +773,16 @@ export default function PhysicalKiosk() {
     ) return;
     stopSpeechRecognition();
     setBusy(true);
+    setAnswerProgress("evaluating");
     setError("");
     setFeedbackMessage("");
+    const slowTimer = window.setTimeout(
+      () => setAnswerProgress("taking_longer"),
+      8_000,
+    );
     try {
       if (activeSession.group) await liveSpeaker.flush();
-      const result = await physicalEvaluationService.submitAnswer(
+      const result = await submitAnswerWithRecovery(
         activeSession.session_id,
         question.question_id,
         answer.trim(),
@@ -615,6 +813,8 @@ export default function PhysicalKiosk() {
           : "Failed to submit the answer",
       );
     } finally {
+      window.clearTimeout(slowTimer);
+      setAnswerProgress("idle");
       setBusy(false);
     }
   };
@@ -692,7 +892,7 @@ export default function PhysicalKiosk() {
     setError("");
     try {
       await physicalEvaluationService.closeKiosk(closePin);
-      window.location.replace("/login");
+      router.replace("/login");
     } catch (closeError) {
       setError(
         closeError instanceof Error
@@ -707,7 +907,11 @@ export default function PhysicalKiosk() {
     if (!activeSession || busy) return;
     setBusy(true);
     setError("");
-    await finalizeEvaluation(activeSession.session_id);
+    if (sessionRecorder.finalizationStage === "idle") {
+      await recoverServerRecording(activeSession.session_id, true);
+    } else {
+      await finalizeEvaluation(activeSession.session_id);
+    }
     setBusy(false);
   };
 
@@ -718,6 +922,7 @@ export default function PhysicalKiosk() {
     setActiveSession(null);
     setQuestion(null);
     setAnswer("");
+    setAnswerProgress("idle");
     setFeedbackMessage("");
     setSeatBindings([]);
     setMissingEnrollment([]);
@@ -1008,8 +1213,8 @@ export default function PhysicalKiosk() {
               Present your project to the camera
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-400">
-              The room camera stays on for future live gesture analysis, but no
-              video is saved or uploaded. Continue to the AI viva when ready.
+              The room camera and protected session recording stay active for
+              post-session behavior analysis. Continue to the AI viva when ready.
             </p>
             {error && (
               <p className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
@@ -1201,8 +1406,10 @@ export default function PhysicalKiosk() {
               >
                 {busy ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Evaluating
-                    answer...
+                    <Loader2 className="h-4 w-4 animate-spin" />{" "}
+                    {answerProgress === "taking_longer"
+                      ? "Still evaluating safely..."
+                      : "Evaluating answer..."}
                   </>
                 ) : (
                   "Submit Answer"
@@ -1211,6 +1418,30 @@ export default function PhysicalKiosk() {
             </div>
           </div>
         </EvaluationShell>
+      )}
+
+      {phase === "finalizing" && (
+        <section className="mx-auto flex max-w-2xl items-center justify-center px-5 py-16">
+          <div className="w-full rounded-3xl border border-indigo-400/20 bg-slate-900 p-8 text-center">
+            <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-indigo-300" />
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
+              Answer saved
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold text-white">
+              Finishing the session recording
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-slate-400">
+              {sessionRecorder.finalizationStage === "stopping"
+                ? "Stopping the room recording safely…"
+                : sessionRecorder.finalizationStage === "uploading"
+                  ? "Uploading the final recording segment…"
+                  : "Verifying the complete recording for behavior analysis…"}
+            </p>
+            <p className="mt-5 rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-xs leading-5 text-amber-100">
+              Please keep this window open. This does not change the saved answer or score.
+            </p>
+          </div>
+        </section>
       )}
 
       {phase === "finish_error" && (
@@ -1222,8 +1453,8 @@ export default function PhysicalKiosk() {
             </h2>
             <p className="mt-2 text-sm leading-6 text-red-200">{error}</p>
             <p className="mt-2 text-xs leading-5 text-slate-400">
-              Your evaluated answers are already saved. Retry only the small
-              completion request; there is no video upload.
+              Your evaluated answers are already saved. Retry resumes the
+              recording upload or finalization; it does not submit the answer again.
             </p>
             <Button
               onClick={retryFinish}
@@ -1246,6 +1477,7 @@ export default function PhysicalKiosk() {
             <p className="mt-2 text-sm leading-6 text-slate-400">
               The answers were scored by the shared viva evaluator. The camera
               session has ended, and the next student can begin immediately.
+              The protected recording will continue uploading in the background.
             </p>
             <p className="mt-5 font-medium text-slate-200">
               Thank you,{" "}
