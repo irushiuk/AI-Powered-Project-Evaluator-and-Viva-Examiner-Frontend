@@ -12,6 +12,7 @@ interface StudentAnswerPanelProps {
   speechSupported: boolean;
   isSubmitting: boolean;
   examinerQuestionActive: boolean;
+  examinerQuestionInProgress: boolean;
   aiPaused: boolean;
   onAnswerChange: (answer: string) => void;
   onSkip: () => void;
@@ -24,6 +25,7 @@ export function StudentAnswerPanel({
   speechSupported,
   isSubmitting,
   examinerQuestionActive,
+  examinerQuestionInProgress,
   aiPaused,
   onAnswerChange,
   onSkip,
@@ -45,7 +47,7 @@ export function StudentAnswerPanel({
               : "Speech recognition unavailable. Type your answer."
           }
           className="min-h-24 resize-none border-slate-800 bg-slate-900/50 text-sm text-slate-100 placeholder:text-slate-600"
-          disabled={isSubmitting}
+          disabled={isSubmitting || examinerQuestionInProgress || (aiPaused && !examinerQuestionActive)}
         />
         {interimTranscript && (
           <p className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-400">
@@ -59,7 +61,7 @@ export function StudentAnswerPanel({
           size="sm"
           variant="outline"
           onClick={onSkip}
-          disabled={isSubmitting || examinerQuestionActive || aiPaused}
+          disabled={isSubmitting || examinerQuestionActive || examinerQuestionInProgress || aiPaused}
           className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
         >
           <SkipForward className="mr-1.5 h-3.5 w-3.5" />
@@ -72,7 +74,9 @@ export function StudentAnswerPanel({
             onSubmit(appendTranscript(answerText, interimTranscript))
           }
           disabled={
-            isSubmitting || (!answerText.trim() && !interimTranscript.trim())
+            isSubmitting || examinerQuestionInProgress ||
+            (aiPaused && !examinerQuestionActive) ||
+            (!answerText.trim() && !interimTranscript.trim())
           }
           className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
         >

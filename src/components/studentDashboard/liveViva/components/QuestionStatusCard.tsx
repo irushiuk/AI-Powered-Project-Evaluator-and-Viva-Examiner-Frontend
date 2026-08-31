@@ -11,6 +11,7 @@ import type { VivaQuestion } from "@/types/vivaSession";
 interface QuestionStatusCardProps {
   currentQuestion: VivaQuestion | null;
   examinerQuestion: LiveQuestion | null;
+  examinerQuestionInProgress: boolean;
   takeoverStatus: SessionTakeoverStatus | null;
   isRecording: boolean;
   isSpeaking: boolean;
@@ -27,6 +28,7 @@ function formatTime(seconds: number) {
 export function QuestionStatusCard({
   currentQuestion,
   examinerQuestion,
+  examinerQuestionInProgress,
   takeoverStatus,
   isRecording,
   isSpeaking,
@@ -34,7 +36,7 @@ export function QuestionStatusCard({
   micMuted,
 }: QuestionStatusCardProps) {
   const examinerHasControl = Boolean(
-    examinerQuestion || takeoverStatus?.paused,
+    examinerQuestion || examinerQuestionInProgress || takeoverStatus?.paused,
   );
 
   return (
@@ -88,15 +90,17 @@ export function QuestionStatusCard({
             <VolumeX className="h-5 w-5 shrink-0 text-slate-500" />
           )}
           <span className="text-xs text-slate-400">
-            {takeoverStatus?.paused &&
+            {examinerQuestionInProgress &&
+              "Examiner is asking a question..."}
+            {!examinerQuestionInProgress && takeoverStatus?.paused &&
               !examinerQuestion &&
               "AI is paused. Waiting for Examiner..."}
             {!takeoverStatus?.paused &&
               isSpeaking &&
               "AI Examiner is speaking..."}
-            {takeoverStatus?.paused &&
+            {!examinerQuestionInProgress && takeoverStatus?.paused &&
               examinerQuestion &&
-              "Examiner is speaking..."}
+              "Answer the examiner's question"}
             {!takeoverStatus?.paused && isRecording && (
               <span className="font-medium text-red-400">
                 Transcribing: {formatTime(recordingTime)}
@@ -115,11 +119,13 @@ export function QuestionStatusCard({
         {examinerHasControl ? (
           <div className="py-2">
             <p className="text-base font-medium leading-relaxed text-amber-500">
-              The examiner has taken over the session to ask you a question
-              directly.
+              {examinerQuestion?.question_text ||
+                "The examiner is asking a question. Please listen."}
             </p>
             <p className="mt-2 text-xs text-amber-400/70">
-              Please listen to the examiner and speak your answer.
+              {examinerQuestion
+                ? "Speak or type your answer below."
+                : "Answer entry will open when the question is complete."}
             </p>
           </div>
         ) : (

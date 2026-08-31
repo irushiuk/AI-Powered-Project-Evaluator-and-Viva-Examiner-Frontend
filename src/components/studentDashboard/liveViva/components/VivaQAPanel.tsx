@@ -16,6 +16,7 @@ interface VivaQAPanelProps {
   isExaminerView?: boolean;
   currentQuestion: VivaQuestion | null;
   examinerQuestion: LiveQuestion | null;
+  examinerQuestionInProgress: boolean;
   takeoverStatus: SessionTakeoverStatus | null;
   isRecording: boolean;
   isSpeaking: boolean;
@@ -45,6 +46,7 @@ export function VivaQAPanel({
   isExaminerView,
   currentQuestion,
   examinerQuestion,
+  examinerQuestionInProgress,
   takeoverStatus,
   isRecording,
   isSpeaking,
@@ -101,6 +103,7 @@ export function VivaQAPanel({
         <QuestionStatusCard
           currentQuestion={currentQuestion}
           examinerQuestion={examinerQuestion}
+          examinerQuestionInProgress={examinerQuestionInProgress}
           takeoverStatus={takeoverStatus}
           isRecording={isRecording}
           isSpeaking={isSpeaking}
@@ -115,6 +118,7 @@ export function VivaQAPanel({
             speechSupported={speechSupported}
             isSubmitting={isSubmitting}
             examinerQuestionActive={Boolean(examinerQuestion)}
+            examinerQuestionInProgress={examinerQuestionInProgress}
             aiPaused={Boolean(takeoverStatus?.paused)}
             onAnswerChange={onAnswerChange}
             onSkip={onSkip}

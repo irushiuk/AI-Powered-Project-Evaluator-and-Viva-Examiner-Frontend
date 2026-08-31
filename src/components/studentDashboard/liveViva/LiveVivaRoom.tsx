@@ -47,14 +47,24 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   // A live question typed by the examiner takes priority over the AI flow;
   // the current AI question stays parked until this is answered.
   const [examinerQuestion, setExaminerQuestion] = useState<LiveQuestion | null>(null)
+  const [examinerQuestionInProgress, setExaminerQuestionInProgress] = useState(false)
+  const [remoteParticipantSpeaking, setRemoteParticipantSpeaking] = useState(false)
   const seenExaminerQuestionsRef = useRef<Set<string>>(new Set())
+  const interventionActiveRef = useRef(false)
+  const parkedAiAnswerRef = useRef('')
+  const answerTextRef = useRef('')
 
   // Examiner Takeover States
   const [takeoverStatus, setTakeoverStatus] = useState<SessionTakeoverStatus | null>(null)
   const [examinerDraftText, setExaminerDraftText] = useState('')
+  const examinerDraftTextRef = useRef('')
   const [activePreemptiveId, setActivePreemptiveId] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const examinerRecognitionRef = useRef<BrowserSpeechRecognition | null>(null)
+
+  useEffect(() => {
+    answerTextRef.current = answerText
+  }, [answerText])
 
   // Explicit, button-driven session lifecycle (no clock-based transitions):
   //   'checking'         → fetching the current phase
@@ -105,20 +115,40 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     abortRecognition,
   } = useVivaSpeech({
     sessionId,
-    questionText: hasFinished
+    // The examiner asks live through Agora. Never synthesize that question a
+    // second time, and never run the student speech pipeline in examiner view.
+    questionText: hasFinished || isExaminerView
       ? null
-      : (examinerQuestion?.question_text ?? currentQuestion?.question_text ?? null),
-    questionId: examinerQuestion ? null : (currentQuestion?.question_id ?? null),
-    audioUrl: examinerQuestion ? null : (currentQuestion?.audio_url ?? null),
-    ttsStatus: examinerQuestion ? 'disabled' : (currentQuestion?.tts_status ?? 'disabled'),
+      : (currentQuestion?.question_text ?? null),
+    questionId: hasFinished || isExaminerView
+      ? null
+      : (currentQuestion?.question_id ?? null),
+    audioUrl: currentQuestion?.audio_url ?? null,
+    ttsStatus: currentQuestion?.tts_status ?? 'disabled',
     canListen: (
-      !hasFinished && !isLoading && !isSubmitting && phase === 'viva_in_progress' &&
+      !isExaminerView && !hasFinished && !isLoading && !isSubmitting &&
+      phase === 'viva_in_progress' && !examinerQuestionInProgress &&
+      !remoteParticipantSpeaking &&
+      (!takeoverStatus?.paused || Boolean(examinerQuestion)) &&
       Boolean(currentQuestion || examinerQuestion)
     ),
     onFinalTranscript: (transcript) => {
-      setAnswerText((previous) => appendTranscript(previous, transcript))
+      if (!isExaminerView) {
+        setAnswerText((previous) => appendTranscript(previous, transcript))
+      }
     },
   })
+
+  const beginExaminerIntervention = useCallback(() => {
+    if (!interventionActiveRef.current) {
+      interventionActiveRef.current = true
+      parkedAiAnswerRef.current = answerTextRef.current
+      answerTextRef.current = ''
+      setAnswerText('')
+    }
+    abortRecognition()
+    clearInterimTranscript()
+  }, [abortRecognition, clearInterimTranscript])
 
   useEffect(() => {
     if (currentQuestion || examinerQuestion) setShowQAPanel(true)
@@ -193,6 +223,12 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
 
     return () => {
       mountedRef.current = false
+      try {
+        examinerRecognitionRef.current?.abort()
+      } catch {
+        // Recognition may already be stopped.
+      }
+      examinerRecognitionRef.current = null
     }
   }, [loadFirstQuestion, sessionId])
 
@@ -277,23 +313,43 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     if (isLoading || hasFinished || phase !== 'viva_in_progress') return
     const id = window.setInterval(async () => {
       try {
-        const pending = await liveQuestionService.pending(sessionId)
+        const { pending, examiner_speaking } =
+          await liveQuestionService.pending(sessionId)
+        if (examiner_speaking) {
+          beginExaminerIntervention()
+          setExaminerQuestionInProgress(true)
+          setTakeoverStatus((previous) => previous
+            ? { ...previous, paused: true }
+            : previous)
+        }
         if (
           pending &&
           !seenExaminerQuestionsRef.current.has(pending.question_id)
         ) {
+          beginExaminerIntervention()
           seenExaminerQuestionsRef.current.add(pending.question_id)
           setExaminerQuestion(pending)
+          setExaminerQuestionInProgress(false)
           toast.info('The examiner has asked you a question.', {
             duration: 6000,
           })
+        } else if (pending) {
+          // Refresh text for a question that was first observed as a draft.
+          setExaminerQuestion(pending)
+          setExaminerQuestionInProgress(false)
         }
       } catch {
         // transient poll failures are fine; next tick retries
       }
-    }, 4000)
+    }, 750)
     return () => window.clearInterval(id)
-  }, [sessionId, isLoading, hasFinished, phase])
+  }, [
+    sessionId,
+    isLoading,
+    hasFinished,
+    phase,
+    beginExaminerIntervention,
+  ])
 
   // Group sync: poll the latest AI question so a member's screen advances
   // when a teammate answers. Harmless in individual mode (id won't change
@@ -379,18 +435,54 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     }
   }
 
+  const stopExaminerRecognition = useCallback(async () => {
+    const recognition = examinerRecognitionRef.current
+    if (!recognition) return examinerDraftTextRef.current.trim()
+
+    return new Promise<string>((resolve) => {
+      let finished = false
+      const finish = () => {
+        if (finished) return
+        finished = true
+        window.clearTimeout(timeout)
+        if (examinerRecognitionRef.current === recognition) {
+          examinerRecognitionRef.current = null
+        }
+        resolve(examinerDraftTextRef.current.trim())
+      }
+      const previousOnEnd = recognition.onend
+      recognition.onend = () => {
+        previousOnEnd?.()
+        finish()
+      }
+      const timeout = window.setTimeout(finish, 1200)
+      try {
+        recognition.stop()
+      } catch {
+        finish()
+      }
+    })
+  }, [])
+
   const handleEndSession = async () => {
     setActionLoading('end')
     try {
       // Auto-save any in-progress voice question transcript before ending
       if (activePreemptiveId) {
-        examinerRecognitionRef.current?.stop()
-        try {
-          await liveQuestionService.updatePreemptive(sessionId, activePreemptiveId, examinerDraftText || '[Examiner asked question via voice]')
-        } catch {
-          // Best-effort save; proceed with ending regardless
+        const finalQuestionText = await stopExaminerRecognition()
+        if (finalQuestionText) {
+          try {
+            await liveQuestionService.updatePreemptive(
+              sessionId,
+              activePreemptiveId,
+              finalQuestionText,
+            )
+          } catch {
+            // Best-effort save; proceed with ending regardless.
+          }
         }
         setActivePreemptiveId(null)
+        examinerDraftTextRef.current = ''
         setExaminerDraftText('')
       }
       await liveQuestionService.endSession(sessionId)
@@ -413,11 +505,26 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     recognition.lang = 'en-US'
     recognition.onresult = (event) => {
       let finalTranscript = ''
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript
+      let interimTranscript = ''
+      for (let i = 0; i < event.results.length; i += 1) {
+        const transcript = event.results[i][0]?.transcript ?? ''
+        if (event.results[i].isFinal) finalTranscript += transcript
+        else interimTranscript += transcript
       }
-      if (finalTranscript) {
-        setExaminerDraftText(prev => appendTranscript(prev, finalTranscript))
+      const visibleTranscript = appendTranscript(finalTranscript, interimTranscript)
+      if (visibleTranscript) {
+        examinerDraftTextRef.current = visibleTranscript
+        setExaminerDraftText(visibleTranscript)
+      }
+    }
+    recognition.onerror = () => {
+      if (examinerRecognitionRef.current === recognition) {
+        examinerRecognitionRef.current = null
+      }
+    }
+    recognition.onend = () => {
+      if (examinerRecognitionRef.current === recognition) {
+        examinerRecognitionRef.current = null
       }
     }
     examinerRecognitionRef.current = recognition
@@ -429,6 +536,10 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     try {
       const { question_id } = await liveQuestionService.createPreemptive(sessionId)
       setActivePreemptiveId(question_id)
+      setTakeoverStatus((previous) => previous
+        ? { ...previous, paused: true }
+        : previous)
+      examinerDraftTextRef.current = ''
       setExaminerDraftText('')
       startExaminerRecognition()
     } catch {
@@ -441,10 +552,19 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   const handleSendExaminerQuestion = async () => {
     if (!activePreemptiveId) return
     setActionLoading('send_q')
-    examinerRecognitionRef.current?.stop()
     try {
-      await liveQuestionService.updatePreemptive(sessionId, activePreemptiveId, examinerDraftText)
+      const finalQuestionText = await stopExaminerRecognition()
+      if (!finalQuestionText) {
+        toast.error('No question was transcribed. Please type the question before saving.')
+        return
+      }
+      await liveQuestionService.updatePreemptive(
+        sessionId,
+        activePreemptiveId,
+        finalQuestionText,
+      )
       setActivePreemptiveId(null)
+      examinerDraftTextRef.current = ''
       setExaminerDraftText('')
       toast.success('Question text saved to transcript')
     } catch {
@@ -453,6 +573,11 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       setActionLoading(null)
     }
   }
+
+  const handleExaminerDraftChange = useCallback((text: string) => {
+    examinerDraftTextRef.current = text
+    setExaminerDraftText(text)
+  }, [])
 
   const submitAnswer = async (rawAnswer: string) => {
     if (!currentQuestion && !examinerQuestion) return
@@ -476,7 +601,12 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
           answer,
         )
         setExaminerQuestion(null)
-        setAnswerText('')
+        const parkedAnswer = parkedAiAnswerRef.current
+        parkedAiAnswerRef.current = ''
+        interventionActiveRef.current = false
+        setExaminerQuestionInProgress(false)
+        answerTextRef.current = parkedAnswer
+        setAnswerText(parkedAnswer)
         clearInterimTranscript()
         toast.success('Answer sent to the examiner.')
       } catch (error) {
@@ -609,6 +739,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       endingDemo={endingDemo}
       currentQuestion={currentQuestion}
       examinerQuestion={examinerQuestion}
+      examinerQuestionInProgress={examinerQuestionInProgress}
       takeoverStatus={takeoverStatus}
       showQAPanel={showQAPanel}
       setShowQAPanel={setShowQAPanel}
@@ -624,7 +755,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       actionLoading={actionLoading}
       activePreemptiveId={activePreemptiveId}
       examinerDraftText={examinerDraftText}
-      setExaminerDraftText={setExaminerDraftText}
+      setExaminerDraftText={handleExaminerDraftChange}
       showExitConfirm={showExitConfirm}
       setShowExitConfirm={setShowExitConfirm}
       handleLocalTracks={handleLocalTracks}
@@ -641,6 +772,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       handleStartExaminerQuestion={handleStartExaminerQuestion}
       handleSendExaminerQuestion={handleSendExaminerQuestion}
       handleMicToggle={handleMicToggle}
+      onRemoteAudioActivity={setRemoteParticipantSpeaking}
       abortRecognition={abortRecognition}
       onBack={() => router.back()}
     />

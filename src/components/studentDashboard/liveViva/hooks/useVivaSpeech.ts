@@ -290,9 +290,20 @@ export function useVivaSpeech({
   }, [audioUrl, questionId, questionText, sessionId, ttsStatus])
 
   useEffect(() => {
-    if (!canListen || isSpeaking || micMuted || isRecording) return
+    if (!canListen || isSpeaking || micMuted) {
+      if (isRecording) stopRecognition(true)
+      return
+    }
+    if (isRecording) return
     startRecognition()
-  }, [canListen, isRecording, isSpeaking, micMuted, startRecognition])
+  }, [
+    canListen,
+    isRecording,
+    isSpeaking,
+    micMuted,
+    startRecognition,
+    stopRecognition,
+  ])
 
   useEffect(() => {
     if (!isRecording) {
