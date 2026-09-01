@@ -94,6 +94,7 @@ export const PHYSICAL_API = {
   sessions: `${API_BASE}/physical/kiosk/sessions/`,
   activeRun: `${API_BASE}/physical/kiosk/active/`,
   startSession: (sessionId: string) => `${API_BASE}/physical/kiosk/sessions/${sessionId}/start/`,
+  startRecording: (sessionId: string) => `${API_BASE}/physical/kiosk/sessions/${sessionId}/recording/start/`,
   completeDemo: (sessionId: string) => `${API_BASE}/physical/kiosk/sessions/${sessionId}/demo/complete/`,
   overrideIdentity: (sessionId: string) => `${API_BASE}/physical/kiosk/sessions/${sessionId}/identity/override/`,
   finishSession: (sessionId: string) => `${API_BASE}/physical/kiosk/sessions/${sessionId}/finish/`,

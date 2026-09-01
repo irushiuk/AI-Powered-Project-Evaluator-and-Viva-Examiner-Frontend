@@ -423,6 +423,36 @@ export default function PhysicalKiosk() {
     setMediaStream(stream);
   }, []);
 
+  const startProtectedRecording = useCallback(
+    async (
+      session: PhysicalSession,
+      resume: {
+        nextChunkIndex?: number;
+        startedAt?: string | number;
+      } = {},
+    ) => {
+      await startCamera();
+      const stream = mediaStreamRef.current;
+      if (!stream) {
+        throw new Error("The room camera is not available for recording.");
+      }
+      const startedAt = sessionRecorder.start(
+        session.session_id,
+        stream,
+        resume,
+      );
+      if (!startedAt) {
+        throw new Error("This browser could not start the room recording.");
+      }
+      await physicalEvaluationService.startRecording(
+        session.session_id,
+        new Date(startedAt).toISOString(),
+      );
+      return startedAt;
+    },
+    [sessionRecorder, startCamera],
+  );
+
   const stopCamera = useCallback(() => {
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     mediaStreamRef.current = null;
@@ -606,6 +636,9 @@ export default function PhysicalKiosk() {
       setBusy(true);
       setError("");
       try {
+        // Capture begins immediately before the assessed viva boundary, not
+        // while the student is completing identity and sensor setup.
+        await startProtectedRecording(session);
         const firstQuestion = await physicalEvaluationService.startViva(
           session.session_id,
         );
@@ -625,7 +658,7 @@ export default function PhysicalKiosk() {
         setBusy(false);
       }
     },
-    [],
+    [startProtectedRecording],
   );
 
   const submitIdentityOverride = useCallback(async () => {
@@ -659,11 +692,24 @@ export default function PhysicalKiosk() {
   const continueAfterSensorSetup = useCallback(async () => {
     if (!activeSession) return;
     if (nextEvaluationPhase === "demo") {
-      setPhase("demo");
+      setBusy(true);
+      setError("");
+      try {
+        await startProtectedRecording(activeSession);
+        setPhase("demo");
+      } catch (recordingError) {
+        setError(
+          recordingError instanceof Error
+            ? recordingError.message
+            : "Failed to start the room recording",
+        );
+      } finally {
+        setBusy(false);
+      }
       return;
     }
     await beginViva(activeSession);
-  }, [activeSession, beginViva, nextEvaluationPhase]);
+  }, [activeSession, beginViva, nextEvaluationPhase, startProtectedRecording]);
 
   const resumeActiveRun = useCallback(
     async (run: PhysicalRun) => {
@@ -683,9 +729,9 @@ export default function PhysicalKiosk() {
 
       setPhase("preparing");
       await startCamera();
-      if (mediaStreamRef.current) {
+      if (run.recording_started_at) {
         const uploadedIndices = run.recording_upload?.uploaded_chunk_indices ?? [];
-        sessionRecorder.start(run.session.session_id, mediaStreamRef.current, {
+        await startProtectedRecording(run.session, {
           nextChunkIndex: uploadedIndices.length
             ? Math.max(...uploadedIndices) + 1
             : run.recording_upload?.uploaded_chunks ?? 0,
@@ -712,6 +758,9 @@ export default function PhysicalKiosk() {
       }
 
       if (run.status === "demo_in_progress") {
+        if (!run.recording_started_at) {
+          await startProtectedRecording(run.session);
+        }
         setPhase("demo");
         return;
       }
@@ -740,8 +789,8 @@ export default function PhysicalKiosk() {
       bindSeats,
       finalizeEvaluation,
       recoverServerRecording,
-      sessionRecorder,
       startCamera,
+      startProtectedRecording,
     ],
   );
 
@@ -833,16 +882,13 @@ export default function PhysicalKiosk() {
     setPhase("preparing");
 
     try {
-      // Camera access starts first; recording begins only after the backend
-      // has authorized and created this physical evaluation run.
+      // Camera preview starts for identity/sensor setup. Protected recording
+      // begins later, at the demo or viva boundary.
       await startCamera();
       const run = await physicalEvaluationService.startSession(
         session.session_id,
       );
       setActiveSession(run.session);
-      if (mediaStreamRef.current) {
-        sessionRecorder.start(run.session.session_id, mediaStreamRef.current);
-      }
       setSpeakerId(run.session.student?.student_id || "group");
       const requestedNextPhase = (
         run.next_action === "start_demo" ||

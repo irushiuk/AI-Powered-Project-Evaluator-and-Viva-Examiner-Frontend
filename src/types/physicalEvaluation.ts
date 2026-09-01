@@ -103,7 +103,7 @@ export type PhysicalRun = {
     | "recording_uploading"
     | "recording_failed"
     | "completed";
-  recording_started_at: string;
+  recording_started_at: string | null;
   viva_started_at: string | null;
   completed_at: string | null;
   next_action?: "start_demo" | "start_viva";

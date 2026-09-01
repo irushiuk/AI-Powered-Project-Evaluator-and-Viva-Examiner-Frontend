@@ -66,6 +66,7 @@ export interface CvSummaryResponse {
   artifact: CvArtifact | null
   recording_url: string
   playback_url: string | null
+  duration_seconds: number | null
   question_timeline: CvQuestionMarker[]
   error_message: string
   updated_at: string
