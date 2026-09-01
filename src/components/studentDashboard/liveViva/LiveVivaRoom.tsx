@@ -96,6 +96,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     interimTranscript,
     clearInterimTranscript,
     isRecording,
+    isTranscribing,
     isSpeaking,
     micMuted,
     speechSupported,
@@ -457,13 +458,14 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   const submitAnswer = async (rawAnswer: string) => {
     if (!currentQuestion && !examinerQuestion) return
 
-    const answer = rawAnswer.trim()
+    // Stop first: Scribe may still be transcribing the final sentence, and
+    // that text belongs in this submission rather than the next question's.
+    const pending = isRecording ? await stopRecognition() : ''
+    const answer = appendTranscript(rawAnswer, pending).trim()
     if (!answer) {
       toast.error('Please speak or type an answer before submitting.')
       return
     }
-
-    if (isRecording) stopRecognition()
 
     // An active examiner question intercepts the submit: the answer goes to
     // the examiner, then the parked AI flow resumes.
@@ -613,6 +615,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       showQAPanel={showQAPanel}
       setShowQAPanel={setShowQAPanel}
       isRecording={isRecording}
+      isTranscribing={isTranscribing}
       isSpeaking={isSpeaking}
       recordingTime={recordingTime}
       micMuted={micMuted}

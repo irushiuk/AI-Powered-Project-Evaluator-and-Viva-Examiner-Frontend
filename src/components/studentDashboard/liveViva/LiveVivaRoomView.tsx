@@ -34,6 +34,7 @@ interface LiveVivaRoomViewProps {
   showQAPanel: boolean;
   setShowQAPanel: Dispatch<SetStateAction<boolean>>;
   isRecording: boolean;
+  isTranscribing: boolean;
   isSpeaking: boolean;
   recordingTime: number;
   micMuted: boolean;
@@ -82,6 +83,7 @@ export function LiveVivaRoomView({
   showQAPanel,
   setShowQAPanel,
   isRecording,
+  isTranscribing,
   isSpeaking,
   recordingTime,
   micMuted,
@@ -206,6 +208,7 @@ export function LiveVivaRoomView({
               examinerQuestion={examinerQuestion}
               takeoverStatus={takeoverStatus}
               isRecording={isRecording}
+              isTranscribing={isTranscribing}
               isSpeaking={isSpeaking}
               recordingTime={recordingTime}
               micMuted={micMuted}

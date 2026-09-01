@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  useSpeechDictation,
+  type DictationTranscriber,
+  type DictationUnavailableReason,
+} from '@/hooks/useSpeechDictation'
 import { vivaSessionService } from '@/services/vivaSessionService'
 import type { VivaTtsStatus } from '@/types/vivaSession'
 import {
@@ -7,6 +12,16 @@ import {
   type BrowserSpeechRecognition,
   type SpeechRecognitionWindow,
 } from '../utils/liveVivaUtils'
+
+/**
+ * Answers are transcribed by ElevenLabs Scribe on the server. The browser's
+ * own recogniser is kept only as an outage fallback: it is markedly less
+ * accurate, but a viva must never stall because a provider is unreachable.
+ */
+type DictationMode = 'provider' | 'browser'
+
+/** Consecutive provider failures tolerated before dropping to the browser. */
+const PROVIDER_ERROR_LIMIT = 2
 
 interface UseVivaSpeechOptions {
   sessionId: string
@@ -28,13 +43,15 @@ export function useVivaSpeech({
   onFinalTranscript,
 }: UseVivaSpeechOptions) {
   const [interimTranscript, setInterimTranscript] = useState('')
-  const [isRecording, setIsRecording] = useState(false)
+  const [isBrowserRecording, setIsBrowserRecording] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [micMuted, setMicMutedState] = useState(false)
   const [speechSupported, setSpeechSupported] = useState(true)
   const [recordingTime, setRecordingTime] = useState(0)
+  const [dictationMode, setDictationMode] = useState<DictationMode>('provider')
 
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null)
+  const providerErrorsRef = useRef(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUrlRef = useRef<string | null>(null)
   const micBlockedRef = useRef(false)
@@ -45,16 +62,57 @@ export function useVivaSpeech({
     onFinalTranscriptRef.current = onFinalTranscript
   }, [onFinalTranscript])
 
-  const stopRecognition = useCallback((abort = false) => {
+  const transcribe = useCallback<DictationTranscriber>(
+    (audio, signal) => vivaSessionService.transcribeAnswerAudio(sessionId, audio, signal),
+    [sessionId],
+  )
+
+  const handleProviderUnavailable = useCallback((reason: DictationUnavailableReason) => {
+    if (reason === 'mic-blocked') {
+      micBlockedRef.current = true
+      setSpeechSupported(false)
+      return
+    }
+    if (reason === 'provider-disabled' || reason === 'unsupported') {
+      console.warn(`[VivaSpeech] Falling back to browser dictation (${reason}).`)
+      setDictationMode('browser')
+      return
+    }
+    providerErrorsRef.current += 1
+    if (providerErrorsRef.current >= PROVIDER_ERROR_LIMIT) {
+      console.warn('[VivaSpeech] Scribe kept failing; falling back to browser dictation.')
+      setDictationMode('browser')
+    }
+  }, [])
+
+  const {
+    isListening: isProviderRecording,
+    isTranscribing,
+    audioLevel,
+    start: startDictation,
+    stop: stopDictation,
+    abort: abortDictation,
+  } = useSpeechDictation({
+    transcribe,
+    onFinalTranscript: (text) => {
+      providerErrorsRef.current = 0
+      onFinalTranscriptRef.current(text)
+    },
+    onUnavailable: handleProviderUnavailable,
+  })
+
+  const isRecording = dictationMode === 'provider' ? isProviderRecording : isBrowserRecording
+
+  const stopBrowserRecognition = useCallback((abort = false) => {
     const recognition = recognitionRef.current
     recognitionRef.current = null
     if (abort) recognition?.abort()
     else recognition?.stop()
-    setIsRecording(false)
+    setIsBrowserRecording(false)
     setInterimTranscript('')
   }, [])
 
-  const startRecognition = useCallback(() => {
+  const startBrowserRecognition = useCallback(() => {
     if (recognitionRef.current || micBlockedRef.current) return
     const speechWindow = window as SpeechRecognitionWindow
     const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition
@@ -85,7 +143,7 @@ export function useVivaSpeech({
     const releaseRecognition = () => {
       if (recognitionRef.current !== recognition) return
       recognitionRef.current = null
-      setIsRecording(false)
+      setIsBrowserRecording(false)
       setInterimTranscript('')
     }
 
@@ -99,7 +157,7 @@ export function useVivaSpeech({
     recognition.onend = releaseRecognition
     recognitionRef.current = recognition
     recognition.start()
-    setIsRecording(true)
+    setIsBrowserRecording(true)
   }, [])
 
   useEffect(() => {
@@ -291,8 +349,18 @@ export function useVivaSpeech({
 
   useEffect(() => {
     if (!canListen || isSpeaking || micMuted || isRecording) return
-    startRecognition()
-  }, [canListen, isRecording, isSpeaking, micMuted, startRecognition])
+    if (dictationMode === 'provider') void startDictation()
+    else startBrowserRecognition()
+  }, [
+    canListen, dictationMode, isRecording, isSpeaking, micMuted,
+    startBrowserRecognition, startDictation,
+  ])
+
+  // Dropping to the browser recogniser mid-answer must release the recorder
+  // first, or two captures fight over the same microphone.
+  useEffect(() => {
+    if (dictationMode === 'browser') abortDictation()
+  }, [abortDictation, dictationMode])
 
   useEffect(() => {
     if (!isRecording) {
@@ -310,19 +378,41 @@ export function useVivaSpeech({
     if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
   }, [])
 
+  /**
+   * Stops listening and resolves with any speech that had not been folded into
+   * the answer yet, so a submit never drops the student's last sentence.
+   */
+  const stopRecognition = useCallback(async (): Promise<string> => {
+    if (dictationMode === 'provider') return stopDictation()
+    stopBrowserRecognition()
+    return ''
+  }, [dictationMode, stopBrowserRecognition, stopDictation])
+
+  const abortRecognition = useCallback(() => {
+    abortDictation()
+    stopBrowserRecognition(true)
+  }, [abortDictation, stopBrowserRecognition])
+
   const setMicMuted = useCallback((muted: boolean) => {
     setMicMutedState(muted)
-    if (muted) stopRecognition()
-    else micBlockedRef.current = false
+    if (!muted) {
+      micBlockedRef.current = false
+      return
+    }
+    // Muting still finishes the sentence in progress rather than discarding it.
+    void stopRecognition().then((pending) => {
+      if (pending) onFinalTranscriptRef.current(pending)
+    })
   }, [stopRecognition])
 
   const clearInterimTranscript = useCallback(() => setInterimTranscript(''), [])
-  const abortRecognition = useCallback(() => stopRecognition(true), [stopRecognition])
 
   return {
     interimTranscript,
     clearInterimTranscript,
     isRecording,
+    isTranscribing,
+    audioLevel,
     isSpeaking,
     micMuted,
     speechSupported,

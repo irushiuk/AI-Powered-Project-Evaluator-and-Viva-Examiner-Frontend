@@ -4,6 +4,7 @@ import type {
   StartVivaResponse,
   SubmitVivaAnswerResponse,
   VivaSessionStatusResponse,
+  VivaTranscriptionResponse,
 } from '@/types/vivaSession'
 import apiFetch from './apiClient'
 
@@ -20,6 +21,16 @@ async function readJson<T>(res: Response, fallbackMessage: string): Promise<T> {
   }
 
   return (data?.data ?? data) as T
+}
+
+/** Filename extension the transcription provider dispatches on. */
+function audioExtension(mimeType: string): string {
+  const base = (mimeType || '').split(';')[0].toLowerCase()
+  if (base.includes('ogg')) return 'ogg'
+  if (base.includes('mp4')) return 'mp4'
+  if (base.includes('mpeg')) return 'mp3'
+  if (base.includes('wav')) return 'wav'
+  return 'webm'
 }
 
 export const vivaSessionService = {
@@ -72,6 +83,29 @@ export const vivaSessionService = {
     signal?: AbortSignal,
   ): Promise<Response> {
     return apiFetch(VIVA_API.questionAudio(sessionId, questionId), { signal })
+  },
+
+  /**
+   * Transcribes one recorded utterance server-side (ElevenLabs Scribe). The
+   * provider key stays on the backend; the browser only uploads audio.
+   */
+  async transcribeAnswerAudio(
+    sessionId: string,
+    audio: Blob,
+    signal?: AbortSignal,
+  ): Promise<VivaTranscriptionResponse> {
+    const form = new FormData()
+    form.append('audio', audio, `answer.${audioExtension(audio.type)}`)
+
+    const res = await apiFetch(VIVA_API.transcribeAnswer(sessionId), {
+      method: 'POST',
+      body: form,
+      signal,
+    })
+
+    if (res.status === 503) return { text: '', stt_status: 'disabled' }
+
+    return readJson<VivaTranscriptionResponse>(res, 'Failed to transcribe the answer')
   },
 
   /** Student starts the demo/presentation phase (scheduled → demo in progress). */

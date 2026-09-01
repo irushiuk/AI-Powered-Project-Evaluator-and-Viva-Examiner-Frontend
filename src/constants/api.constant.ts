@@ -79,6 +79,8 @@ export const VIVA_API = {
   currentQuestion: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/current/`,
   questionAudio: (sessionId: string, questionId: string) =>
     `${API_BASE}/viva/sessions/${sessionId}/questions/${questionId}/audio/`,
+  transcribeAnswer: (sessionId: string) =>
+    `${API_BASE}/viva/sessions/${sessionId}/transcribe/`,
   sessionReport: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/report/`,
   detailedReport: (sessionId: string) => `${API_BASE}/viva/sessions/${sessionId}/detailed-report/`,
   patchAnswerScore: (sessionId: string, answerId: string) => `${API_BASE}/viva/sessions/${sessionId}/answers/${answerId}/score/`,
