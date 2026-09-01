@@ -160,6 +160,28 @@ export function useVivaSpeech({
     setIsBrowserRecording(true)
   }, [])
 
+  /**
+   * Stops listening and resolves with any speech that had not been folded into
+   * the answer yet, so a submit never drops the student's last sentence.
+   */
+  const stopRecognition = useCallback(async (): Promise<string> => {
+    if (dictationMode === 'provider') return stopDictation()
+    stopBrowserRecognition()
+    return ''
+  }, [dictationMode, stopBrowserRecognition, stopDictation])
+
+  const abortRecognition = useCallback(() => {
+    abortDictation()
+    stopBrowserRecognition(true)
+  }, [abortDictation, stopBrowserRecognition])
+
+  /** Ends listening and folds any last transcript into the answer. */
+  const finishListening = useCallback(() => {
+    void stopRecognition().then((pending) => {
+      if (pending) onFinalTranscriptRef.current(pending)
+    })
+  }, [stopRecognition])
+
   useEffect(() => {
     voiceRef.current = pickVoice()
     const onVoicesChanged = () => { voiceRef.current = pickVoice() }
@@ -348,12 +370,19 @@ export function useVivaSpeech({
   }, [audioUrl, questionId, questionText, sessionId, ttsStatus])
 
   useEffect(() => {
-    if (!canListen || isSpeaking || micMuted || isRecording) return
+    // Releasing the mic the moment the AI speaks matters more with Scribe than
+    // it did with the browser recogniser: a live recorder would capture the
+    // question audio, transcribe it, and bill it as the student's answer.
+    if (!canListen || isSpeaking || micMuted) {
+      if (isRecording) finishListening()
+      return
+    }
+    if (isRecording) return
     if (dictationMode === 'provider') void startDictation()
     else startBrowserRecognition()
   }, [
-    canListen, dictationMode, isRecording, isSpeaking, micMuted,
-    startBrowserRecognition, startDictation,
+    canListen, dictationMode, finishListening, isRecording, isSpeaking,
+    micMuted, startBrowserRecognition, startDictation,
   ])
 
   // Dropping to the browser recogniser mid-answer must release the recorder
@@ -378,32 +407,12 @@ export function useVivaSpeech({
     if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
   }, [])
 
-  /**
-   * Stops listening and resolves with any speech that had not been folded into
-   * the answer yet, so a submit never drops the student's last sentence.
-   */
-  const stopRecognition = useCallback(async (): Promise<string> => {
-    if (dictationMode === 'provider') return stopDictation()
-    stopBrowserRecognition()
-    return ''
-  }, [dictationMode, stopBrowserRecognition, stopDictation])
-
-  const abortRecognition = useCallback(() => {
-    abortDictation()
-    stopBrowserRecognition(true)
-  }, [abortDictation, stopBrowserRecognition])
-
+  // The listening effect reacts to micMuted and stops the capture there, so
+  // this only records intent. Muting still finishes the sentence in progress.
   const setMicMuted = useCallback((muted: boolean) => {
     setMicMutedState(muted)
-    if (!muted) {
-      micBlockedRef.current = false
-      return
-    }
-    // Muting still finishes the sentence in progress rather than discarding it.
-    void stopRecognition().then((pending) => {
-      if (pending) onFinalTranscriptRef.current(pending)
-    })
-  }, [stopRecognition])
+    if (!muted) micBlockedRef.current = false
+  }, [])
 
   const clearInterimTranscript = useCallback(() => setInterimTranscript(''), [])
 
