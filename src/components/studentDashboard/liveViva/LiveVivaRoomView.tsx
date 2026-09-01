@@ -30,6 +30,7 @@ interface LiveVivaRoomViewProps {
   endingDemo: boolean;
   currentQuestion: VivaQuestion | null;
   examinerQuestion: LiveQuestion | null;
+  examinerQuestionInProgress: boolean;
   takeoverStatus: SessionTakeoverStatus | null;
   showQAPanel: boolean;
   setShowQAPanel: Dispatch<SetStateAction<boolean>>;
@@ -46,7 +47,7 @@ interface LiveVivaRoomViewProps {
   actionLoading: string | null;
   activePreemptiveId: string | null;
   examinerDraftText: string;
-  setExaminerDraftText: Dispatch<SetStateAction<string>>;
+  setExaminerDraftText: (text: string) => void;
   showExitConfirm: boolean;
   setShowExitConfirm: Dispatch<SetStateAction<boolean>>;
   handleLocalTracks: (videoTrack: unknown, audioTrack: unknown) => void;
@@ -63,6 +64,7 @@ interface LiveVivaRoomViewProps {
   handleStartExaminerQuestion: () => Promise<void>;
   handleSendExaminerQuestion: () => Promise<void>;
   handleMicToggle: (isMuted: boolean) => void;
+  onRemoteAudioActivity: (active: boolean) => void;
   abortRecognition: () => void;
   onBack: () => void;
 }
@@ -79,6 +81,7 @@ export function LiveVivaRoomView({
   endingDemo,
   currentQuestion,
   examinerQuestion,
+  examinerQuestionInProgress,
   takeoverStatus,
   showQAPanel,
   setShowQAPanel,
@@ -112,6 +115,7 @@ export function LiveVivaRoomView({
   handleStartExaminerQuestion,
   handleSendExaminerQuestion,
   handleMicToggle,
+  onRemoteAudioActivity,
   abortRecognition,
   onBack,
 }: LiveVivaRoomViewProps) {
@@ -196,8 +200,12 @@ export function LiveVivaRoomView({
         onMicToggle={handleMicToggle}
         onLocalTracks={handleLocalTracks}
         hideEndCallButton
-        initialMute={isExaminerView}
+        initialMute={Boolean(isExaminerView)}
         initialCamOff={isExaminerView}
+        micEnabledOverride={isExaminerView
+          ? Boolean(takeoverStatus?.paused)
+          : undefined}
+        onRemoteAudioActivity={onRemoteAudioActivity}
         remoteJoinNotice="Examiner joining now"
         overlayContent={
           <>
@@ -206,6 +214,7 @@ export function LiveVivaRoomView({
               isExaminerView={isExaminerView}
               currentQuestion={currentQuestion}
               examinerQuestion={examinerQuestion}
+              examinerQuestionInProgress={examinerQuestionInProgress}
               takeoverStatus={takeoverStatus}
               isRecording={isRecording}
               isTranscribing={isTranscribing}

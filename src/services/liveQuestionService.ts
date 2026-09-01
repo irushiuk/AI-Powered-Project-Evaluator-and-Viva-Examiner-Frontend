@@ -10,9 +10,16 @@ export interface LiveQuestionAnswer {
 export interface LiveQuestion {
   question_id: string
   question_text: string
+  ready?: boolean
   question_order: number
   asked_at: string
   answer: LiveQuestionAnswer | null
+}
+
+export interface PendingLiveQuestion {
+  pending: LiveQuestion | null
+  examiner_speaking: boolean
+  paused: boolean
 }
 
 export interface SessionTakeoverStatus {
@@ -47,12 +54,16 @@ export const liveQuestionService = {
   },
 
   /** Student: poll for the oldest unanswered examiner question. */
-  async pending(sessionId: string): Promise<LiveQuestion | null> {
+  async pending(sessionId: string): Promise<PendingLiveQuestion> {
     const res = await apiFetch(LIVE_QUESTIONS_API.pending(sessionId))
-    const data = await ok<{ pending: LiveQuestion | null }>(
+    const data = await ok<PendingLiveQuestion>(
       res, 'Failed to check for examiner questions',
     )
-    return data.pending
+    return {
+      pending: data.pending,
+      examiner_speaking: Boolean(data.examiner_speaking),
+      paused: Boolean(data.paused),
+    }
   },
 
   /** Student: answer an examiner question. */

@@ -390,6 +390,20 @@ export function useVivaSpeech({
   useEffect(() => {
     if (dictationMode === 'browser') abortDictation()
   }, [abortDictation, dictationMode])
+    if (!canListen || isSpeaking || micMuted) {
+      if (isRecording) stopRecognition(true)
+      return
+    }
+    if (isRecording) return
+    startRecognition()
+  }, [
+    canListen,
+    isRecording,
+    isSpeaking,
+    micMuted,
+    startRecognition,
+    stopRecognition,
+  ])
 
   useEffect(() => {
     if (!isRecording) {
