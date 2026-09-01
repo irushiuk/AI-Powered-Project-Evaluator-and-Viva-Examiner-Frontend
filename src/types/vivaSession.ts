@@ -1,6 +1,17 @@
 export type VivaDifficulty = 'easy' | 'medium' | 'hard'
 export type VivaTtsStatus = 'disabled' | 'pending' | 'ready' | 'failed' | 'unavailable'
 
+/** Outcome of a server-side speech-to-text call for one recorded utterance. */
+export type VivaSttStatus = 'ready' | 'empty' | 'disabled' | 'failed'
+
+export type VivaTranscriptionResponse = {
+  text: string
+  stt_status: VivaSttStatus
+  language_code?: string
+  language_probability?: number | null
+  latency_ms?: number
+}
+
 export type BloomsLevel =
   | 'Remember'
   | 'Understand'
