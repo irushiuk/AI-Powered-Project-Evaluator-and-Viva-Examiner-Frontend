@@ -118,6 +118,7 @@ export function VivaQAPanel({
             answerText={answerText}
             interimTranscript={interimTranscript}
             isTranscribing={isTranscribing}
+            isRecording={isRecording}
             speechSupported={speechSupported}
             isSubmitting={isSubmitting}
             examinerQuestionActive={Boolean(examinerQuestion)}

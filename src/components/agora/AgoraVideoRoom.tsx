@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   IAgoraRTCClient,
   IAgoraRTCRemoteUser,
@@ -88,6 +88,19 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
     onMicToggleRef.current = onMicToggle
   })
   const noticedUidsRef = useRef<Set<string | number>>(new Set())
+
+  /**
+   * Tell the parent its cached track references are dead.
+   *
+   * Closing an Agora track tears down its internals, so any later call on it
+   * (`setEnabled`, `getMediaStreamTrack`) throws from deep inside the SDK —
+   * "mutex property key _enabledMutex doesn't exist on MicrophoneAudioTrack".
+   * The parent cannot know a track was closed unless it is told, so every
+   * teardown path announces it.
+   */
+  const releaseLocalTracks = useCallback(() => {
+    onLocalTracksRef.current?.(null, null)
+  }, [])
   const [screenTrack, setScreenTrack] = useState<ScreenTrack>(null)
   const [remoteUsers, setRemoteUsers] = useState<IAgoraRTCRemoteUser[]>([])
   const [roster, setRoster] = useState<Record<number, string>>({})
@@ -238,6 +251,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         if (localAudioTrackRef.current) {
           try { localAudioTrackRef.current.stop(); localAudioTrackRef.current.close() } catch { /* Best-effort cleanup. */ }
           localAudioTrackRef.current = null
+          releaseLocalTracks()
         }
         if (localVideoTrackRef.current) {
           try { localVideoTrackRef.current.stop(); localVideoTrackRef.current.close() } catch { /* Best-effort cleanup. */ }
@@ -410,6 +424,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         if (!active) {
           if (audioTrack) { audioTrack.stop(); audioTrack.close() }
           if (videoTrack) { videoTrack.stop(); videoTrack.close() }
+          releaseLocalTracks()
           await client.leave()
           clientRef.current = null
           return
@@ -490,6 +505,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         if (localAudioTrackRef.current) {
           try { localAudioTrackRef.current.stop(); localAudioTrackRef.current.close() } catch { /* Best-effort cleanup. */ }
           localAudioTrackRef.current = null
+          releaseLocalTracks()
         }
         if (localVideoTrackRef.current) {
           try { localVideoTrackRef.current.stop(); localVideoTrackRef.current.close() } catch { /* Best-effort cleanup. */ }
@@ -523,6 +539,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         localAudioTrackRef.current.stop()
         localAudioTrackRef.current.close()
         localAudioTrackRef.current = null
+        releaseLocalTracks()
       }
       if (localVideoTrackRef.current) {
         localVideoTrackRef.current.stop()

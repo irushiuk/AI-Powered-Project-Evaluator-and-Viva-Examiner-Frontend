@@ -587,15 +587,21 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     const browserRecognitionStarted = startExaminerRecognition()
     setActionLoading('start_q')
     try {
-      if (!demoAudioTrack) {
-        throw new Error('The call microphone is not ready yet.')
-      }
-      await demoAudioTrack.setEnabled(true)
       const { question_id } = await liveQuestionService.createPreemptive(sessionId)
       setActivePreemptiveId(question_id)
+      // Pausing the AI is what opens the examiner's microphone: the room owns
+      // the Agora track and enables it from micEnabledOverride. Reaching into
+      // the track from here used to throw once the room had closed and
+      // recreated it, because this component held the closed one.
       setTakeoverStatus((previous) => previous
         ? { ...previous, paused: true }
-        : previous)
+        : {
+            paused: true,
+            ai_questions_asked: 0,
+            examiner_questions_asked: 0,
+            max_ai_questions: 0,
+            session_status: 'in_progress',
+          })
       if (!browserRecognitionStarted) {
         toast.warning('Live voice transcription is not supported by this browser. Please type the question.')
       }

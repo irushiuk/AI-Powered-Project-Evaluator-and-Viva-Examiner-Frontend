@@ -11,6 +11,7 @@ interface StudentAnswerPanelProps {
   interimTranscript: string;
   /** A recorded utterance is with the transcription service right now. */
   isTranscribing: boolean;
+  isRecording: boolean;
   speechSupported: boolean;
   isSubmitting: boolean;
   examinerQuestionActive: boolean;
@@ -25,6 +26,7 @@ export function StudentAnswerPanel({
   answerText,
   interimTranscript,
   isTranscribing,
+  isRecording,
   speechSupported,
   isSubmitting,
   examinerQuestionActive,
@@ -82,11 +84,10 @@ export function StudentAnswerPanel({
             onSubmit(appendTranscript(answerText, interimTranscript))
           }
           disabled={
-            isSubmitting ||
-            (!answerText.trim() && !interimTranscript.trim() && !isTranscribing)
             isSubmitting || examinerQuestionInProgress ||
             (aiPaused && !examinerQuestionActive) ||
-            (!answerText.trim() && !interimTranscript.trim())
+            (isTranscribing && !isRecording) ||
+            (!answerText.trim() && !interimTranscript.trim() && !isTranscribing)
           }
           className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
         >

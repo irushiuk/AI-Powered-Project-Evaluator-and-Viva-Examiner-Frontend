@@ -55,6 +55,7 @@ export function useVivaSpeech({
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const audioUrlRef = useRef<string | null>(null)
   const micBlockedRef = useRef(false)
+  const speakingRef = useRef(false)
   const voiceRef = useRef<SpeechSynthesisVoice | null>(null)
   const onFinalTranscriptRef = useRef(onFinalTranscript)
 
@@ -194,6 +195,11 @@ export function useVivaSpeech({
 
     let disposed = false
     const controller = new AbortController()
+    // Mark playback synchronously. React has not committed isSpeaking yet when
+    // the listening effect from this same render runs, so the ref prevents a
+    // recorder from opening briefly and capturing the ElevenLabs question.
+    speakingRef.current = true
+    abortRecognition()
     window.speechSynthesis.cancel()
     audioRef.current?.pause()
     audioRef.current = null
@@ -202,7 +208,9 @@ export function useVivaSpeech({
     setIsSpeaking(true)
 
     const finishSpeaking = () => {
-      if (!disposed) setIsSpeaking(false)
+      if (disposed) return
+      speakingRef.current = false
+      setIsSpeaking(false)
     }
 
     const speakWithBrowser = (reason = 'normal fallback') => {
@@ -220,7 +228,10 @@ export function useVivaSpeech({
       utterance.rate = 0.95
       utterance.pitch = 1
       utterance.onstart = () => {
-        if (!disposed) setIsSpeaking(true)
+        if (!disposed) {
+          speakingRef.current = true
+          setIsSpeaking(true)
+        }
       }
       utterance.onend = finishSpeaking
       utterance.onerror = finishSpeaking
@@ -237,6 +248,7 @@ export function useVivaSpeech({
       return new Promise<boolean>((resolve) => {
         console.log(`[VivaSpeech] 🎵 Attempting audio playback with source: ${source}`)
         const audio = new Audio(audioUrl)
+        audio.preload = 'auto'
         audioRef.current = audio
 
         let resolved = false
@@ -261,6 +273,7 @@ export function useVivaSpeech({
 
         audio.onended = () => {
           console.log('[VivaSpeech] ⏹️ Audio playback finished')
+          if (audioRef.current === audio) audioRef.current = null
           finishSpeaking()
         }
 
@@ -318,25 +331,27 @@ export function useVivaSpeech({
 
             // Signed URL response (JSON) — browser streams directly from Azure
             if (contentType.includes('application/json')) {
-              const data = await response.json()
+              const data = await response.json() as { audio_url?: string }
               if (disposed) return
               console.log('[VivaSpeech] 🌐 Received signed audio JSON payload:', data)
               if (data.audio_url) {
                 if (await playFromUrl(data.audio_url, 'Signed Azure URL')) return
                 if (disposed) return
               }
+            } else {
+              // Legacy proxy fallback (binary audio/mpeg). This must be an
+              // else branch: a Response body cannot be consumed as JSON and
+              // then read again as a Blob.
+              console.log('[VivaSpeech] 📦 Received binary audio stream; converting to Blob URL...')
+              const blob = await response.blob()
+              if (disposed) return
+              const blobUrl = URL.createObjectURL(blob)
+              audioUrlRef.current = blobUrl
+              if (await playFromUrl(blobUrl, 'Blob URL')) return
+              URL.revokeObjectURL(blobUrl)
+              audioUrlRef.current = null
+              if (disposed) return
             }
-
-            // Legacy proxy fallback (binary audio/mpeg)
-            console.log('[VivaSpeech] 📦 Received binary audio stream; converting to Blob URL...')
-            const blob = await response.blob()
-            if (disposed) return
-            const blobUrl = URL.createObjectURL(blob)
-            audioUrlRef.current = blobUrl
-            if (await playFromUrl(blobUrl, 'Blob URL')) return
-            URL.revokeObjectURL(blobUrl)
-            audioUrlRef.current = null
-            if (disposed) return
           }
           if (response.status !== 202 && response.status !== 200) {
             console.warn(`[VivaSpeech] Response was ${response.status}; stopping retries`)
@@ -360,6 +375,7 @@ export function useVivaSpeech({
     return () => {
       disposed = true
       controller.abort()
+      speakingRef.current = false
       window.speechSynthesis.cancel()
       audioRef.current?.pause()
       audioRef.current = null
@@ -367,13 +383,13 @@ export function useVivaSpeech({
       audioUrlRef.current = null
       setIsSpeaking(false)
     }
-  }, [audioUrl, questionId, questionText, sessionId, ttsStatus])
+  }, [abortRecognition, audioUrl, questionId, questionText, sessionId, ttsStatus])
 
   useEffect(() => {
     // Releasing the mic the moment the AI speaks matters more with Scribe than
     // it did with the browser recogniser: a live recorder would capture the
     // question audio, transcribe it, and bill it as the student's answer.
-    if (!canListen || isSpeaking || micMuted) {
+    if (!canListen || speakingRef.current || isSpeaking || micMuted) {
       if (isRecording) finishListening()
       return
     }
@@ -390,20 +406,6 @@ export function useVivaSpeech({
   useEffect(() => {
     if (dictationMode === 'browser') abortDictation()
   }, [abortDictation, dictationMode])
-    if (!canListen || isSpeaking || micMuted) {
-      if (isRecording) stopRecognition(true)
-      return
-    }
-    if (isRecording) return
-    startRecognition()
-  }, [
-    canListen,
-    isRecording,
-    isSpeaking,
-    micMuted,
-    startRecognition,
-    stopRecognition,
-  ])
 
   useEffect(() => {
     if (!isRecording) {
@@ -415,11 +417,12 @@ export function useVivaSpeech({
   }, [isRecording])
 
   useEffect(() => () => {
-    recognitionRef.current?.abort()
+    speakingRef.current = false
+    abortRecognition()
     window.speechSynthesis.cancel()
     audioRef.current?.pause()
     if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current)
-  }, [])
+  }, [abortRecognition])
 
   // The listening effect reacts to micMuted and stops the capture there, so
   // this only records intent. Muting still finishes the sentence in progress.
