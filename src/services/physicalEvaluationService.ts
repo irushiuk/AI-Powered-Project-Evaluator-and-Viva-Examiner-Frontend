@@ -15,6 +15,7 @@ import type {
   PhysicalSubmitVivaAnswerResponse,
   StartVivaResponse,
 } from "@/types/physicalEvaluation";
+import type { VivaTranscriptionResponse } from "@/types/vivaSession";
 import apiFetch from "./apiClient";
 
 export interface PhysioSignal {
@@ -241,6 +242,39 @@ export const physicalEvaluationService = {
     signal?: AbortSignal,
   ): Promise<Response> {
     return kioskFetch(VIVA_API.questionAudio(sessionId, questionId), { signal });
+  },
+
+  /** Transcribe one recorded utterance using the kiosk credential. */
+  async transcribeAnswerAudio(
+    sessionId: string,
+    audio: Blob,
+    signal?: AbortSignal,
+  ): Promise<VivaTranscriptionResponse> {
+    const form = new FormData();
+    const base = (audio.type || "").split(";")[0].toLowerCase();
+    const extension = base.includes("ogg")
+      ? "ogg"
+      : base.includes("mp4")
+        ? "mp4"
+        : base.includes("mpeg")
+          ? "mp3"
+          : base.includes("wav")
+            ? "wav"
+            : "webm";
+    form.append("audio", audio, `answer.${extension}`);
+
+    const response = await kioskFetch(VIVA_API.transcribeAnswer(sessionId), {
+      method: "POST",
+      body: form,
+      signal,
+    });
+
+    if (response.status === 503) return { text: "", stt_status: "disabled" };
+
+    return readJson<VivaTranscriptionResponse>(
+      response,
+      "Failed to transcribe the answer",
+    );
   },
 
   async completeSession(

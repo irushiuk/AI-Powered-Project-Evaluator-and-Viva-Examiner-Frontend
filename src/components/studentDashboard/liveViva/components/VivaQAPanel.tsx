@@ -19,6 +19,7 @@ interface VivaQAPanelProps {
   examinerQuestionInProgress: boolean;
   takeoverStatus: SessionTakeoverStatus | null;
   isRecording: boolean;
+  isTranscribing: boolean;
   isSpeaking: boolean;
   recordingTime: number;
   micMuted: boolean;
@@ -49,6 +50,7 @@ export function VivaQAPanel({
   examinerQuestionInProgress,
   takeoverStatus,
   isRecording,
+  isTranscribing,
   isSpeaking,
   recordingTime,
   micMuted,
@@ -115,6 +117,8 @@ export function VivaQAPanel({
           <StudentAnswerPanel
             answerText={answerText}
             interimTranscript={interimTranscript}
+            isTranscribing={isTranscribing}
+            isRecording={isRecording}
             speechSupported={speechSupported}
             isSubmitting={isSubmitting}
             examinerQuestionActive={Boolean(examinerQuestion)}

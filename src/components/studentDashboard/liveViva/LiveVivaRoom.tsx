@@ -106,6 +106,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     interimTranscript,
     clearInterimTranscript,
     isRecording,
+    isTranscribing,
     isSpeaking,
     micMuted,
     speechSupported,
@@ -149,6 +150,27 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     abortRecognition()
     clearInterimTranscript()
   }, [abortRecognition, clearInterimTranscript])
+
+  /**
+   * Leaves the examiner intervention and restores the parked AI answer.
+   *
+   * Previously the only way out was answering the examiner's question. If the
+   * examiner handed back to the AI instead, the panel stayed up, canListen
+   * stayed false, and the group-sync poll kept returning early on a question
+   * that was never going to clear - so that student stopped advancing while
+   * their teammates moved on. Safe to call on every poll: the two setState
+   * calls are no-ops once cleared, and the parked answer is restored once.
+   */
+  const endExaminerIntervention = useCallback(() => {
+    setExaminerQuestion(null)
+    setExaminerQuestionInProgress(false)
+    if (!interventionActiveRef.current) return
+    interventionActiveRef.current = false
+    const parkedAnswer = parkedAiAnswerRef.current
+    parkedAiAnswerRef.current = ''
+    answerTextRef.current = parkedAnswer
+    setAnswerText(parkedAnswer)
+  }, [])
 
   useEffect(() => {
     if (currentQuestion || examinerQuestion) setShowQAPanel(true)
@@ -254,24 +276,17 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       try {
         const st = await liveQuestionService.status(sessionId)
         if (!mountedRef.current) return
-        setTakeoverStatus((previous) => (
-          isExaminerView || !previous
-            ? st
-            : { ...st, paused: previous.paused }
-        ))
+        // Take the server's paused flag verbatim. Students used to keep their
+        // own previous value here, so a resume never reached them from this
+        // poll at all.
+        setTakeoverStatus(st)
       } catch {
         // Status polling is resilient; the next interval retries.
       }
     }, 4000)
     // Initial fetch
     liveQuestionService.status(sessionId).then(st => {
-      if (mountedRef.current) {
-        setTakeoverStatus((previous) => (
-          isExaminerView || !previous
-            ? st
-            : { ...st, paused: previous.paused }
-        ))
-      }
+      if (mountedRef.current) setTakeoverStatus(st)
     }).catch(() => { })
     return () => window.clearInterval(id)
   }, [sessionId, hasFinished, phase, isExaminerView])
@@ -356,6 +371,9 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
           // Refresh text for a question that was first observed as a draft.
           setExaminerQuestion(pending)
           setExaminerQuestionInProgress(false)
+        } else if (!examiner_speaking) {
+          // Nothing outstanding: the examiner has handed the viva back.
+          endExaminerIntervention()
         }
       } catch {
         // transient poll failures are fine; next tick retries
@@ -369,6 +387,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     phase,
     isExaminerView,
     beginExaminerIntervention,
+    endExaminerIntervention,
   ])
 
   // Group sync: poll the latest AI question so a member's screen advances
@@ -586,15 +605,21 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     const browserRecognitionStarted = startExaminerRecognition()
     setActionLoading('start_q')
     try {
-      if (!demoAudioTrack) {
-        throw new Error('The call microphone is not ready yet.')
-      }
-      await demoAudioTrack.setEnabled(true)
       const { question_id } = await liveQuestionService.createPreemptive(sessionId)
       setActivePreemptiveId(question_id)
+      // Pausing the AI is what opens the examiner's microphone: the room owns
+      // the Agora track and enables it from micEnabledOverride. Reaching into
+      // the track from here used to throw once the room had closed and
+      // recreated it, because this component held the closed one.
       setTakeoverStatus((previous) => previous
         ? { ...previous, paused: true }
-        : previous)
+        : {
+            paused: true,
+            ai_questions_asked: 0,
+            examiner_questions_asked: 0,
+            max_ai_questions: 0,
+            session_status: 'in_progress',
+          })
       if (!browserRecognitionStarted) {
         toast.warning('Live voice transcription is not supported by this browser. Please type the question.')
       }
@@ -646,13 +671,14 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
   const submitAnswer = async (rawAnswer: string) => {
     if (!currentQuestion && !examinerQuestion) return
 
-    const answer = rawAnswer.trim()
+    // Stop first: Scribe may still be transcribing the final sentence, and
+    // that text belongs in this submission rather than the next question's.
+    const pending = isRecording ? await stopRecognition() : ''
+    const answer = appendTranscript(rawAnswer, pending).trim()
     if (!answer) {
       toast.error('Please speak or type an answer before submitting.')
       return
     }
-
-    if (isRecording) stopRecognition()
 
     // An active examiner question intercepts the submit: the answer goes to
     // the examiner, then the parked AI flow resumes.
@@ -808,6 +834,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       showQAPanel={showQAPanel}
       setShowQAPanel={setShowQAPanel}
       isRecording={isRecording}
+      isTranscribing={isTranscribing}
       isSpeaking={isSpeaking}
       recordingTime={recordingTime}
       micMuted={micMuted}

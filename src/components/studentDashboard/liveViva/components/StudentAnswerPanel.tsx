@@ -9,6 +9,9 @@ import { appendTranscript } from "../utils/liveVivaUtils";
 interface StudentAnswerPanelProps {
   answerText: string;
   interimTranscript: string;
+  /** A recorded utterance is with the transcription service right now. */
+  isTranscribing: boolean;
+  isRecording: boolean;
   speechSupported: boolean;
   isSubmitting: boolean;
   examinerQuestionActive: boolean;
@@ -22,6 +25,8 @@ interface StudentAnswerPanelProps {
 export function StudentAnswerPanel({
   answerText,
   interimTranscript,
+  isTranscribing,
+  isRecording,
   speechSupported,
   isSubmitting,
   examinerQuestionActive,
@@ -49,11 +54,16 @@ export function StudentAnswerPanel({
           className="min-h-24 resize-none border-slate-800 bg-slate-900/50 text-sm text-slate-100 placeholder:text-slate-600"
           disabled={isSubmitting || examinerQuestionInProgress || (aiPaused && !examinerQuestionActive)}
         />
-        {interimTranscript && (
+        {interimTranscript ? (
           <p className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-400">
             Listening: {interimTranscript}
           </p>
-        )}
+        ) : isTranscribing ? (
+          <p className="flex items-center gap-2 rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-400">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Transcribing what you just said…
+          </p>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-2 pt-1">
@@ -76,7 +86,8 @@ export function StudentAnswerPanel({
           disabled={
             isSubmitting || examinerQuestionInProgress ||
             (aiPaused && !examinerQuestionActive) ||
-            (!answerText.trim() && !interimTranscript.trim())
+            (isTranscribing && !isRecording) ||
+            (!answerText.trim() && !interimTranscript.trim() && !isTranscribing)
           }
           className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
         >

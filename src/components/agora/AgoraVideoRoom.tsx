@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   IAgoraRTCClient,
   IAgoraRTCRemoteUser,
@@ -71,6 +71,15 @@ function closeScreenTrack(track: ScreenTrack) {
   }
 }
 
+/** Volume at which a remote participant counts as actually speaking.
+ *  Conversational speech sits well above this; an open microphone's room
+ *  noise and post-cancellation echo sit well below it. */
+const REMOTE_SPEECH_LEVEL = 0.12
+/** Consecutive loud polls before the room is treated as busy, so a cough or
+ *  a chair scrape cannot cut off the student who is mid-answer. */
+const REMOTE_SPEECH_SAMPLES = 3
+const REMOTE_AUDIO_POLL_MS = 100
+
 export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle, onLocalTracks, remoteJoinNotice, onScreenShareChange, initialMute, initialCamOff, hideEndCallButton, micEnabledOverride, onRemoteAudioActivity }: AgoraVideoRoomProps) {
   const [localVideoTrack, setLocalVideoTrack] = useState<ICameraVideoTrack | null>(null)
   // Refs keep the join effect's dependency list unchanged ([sessionId]).
@@ -88,6 +97,19 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
     onMicToggleRef.current = onMicToggle
   })
   const noticedUidsRef = useRef<Set<string | number>>(new Set())
+
+  /**
+   * Tell the parent its cached track references are dead.
+   *
+   * Closing an Agora track tears down its internals, so any later call on it
+   * (`setEnabled`, `getMediaStreamTrack`) throws from deep inside the SDK —
+   * "mutex property key _enabledMutex doesn't exist on MicrophoneAudioTrack".
+   * The parent cannot know a track was closed unless it is told, so every
+   * teardown path announces it.
+   */
+  const releaseLocalTracks = useCallback(() => {
+    onLocalTracksRef.current?.(null, null)
+  }, [])
   const [screenTrack, setScreenTrack] = useState<ScreenTrack>(null)
   const [remoteUsers, setRemoteUsers] = useState<IAgoraRTCRemoteUser[]>([])
   const [roster, setRoster] = useState<Record<number, string>>({})
@@ -217,6 +239,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
     let remoteAudioMonitorId: number | null = null
     let remoteAudioWasActive = false
     let remoteAudioLastHeardAt = 0
+    let remoteLoudSamples = 0
 
     const initAgora = async () => {
       try {
@@ -238,6 +261,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         if (localAudioTrackRef.current) {
           try { localAudioTrackRef.current.stop(); localAudioTrackRef.current.close() } catch { /* Best-effort cleanup. */ }
           localAudioTrackRef.current = null
+          releaseLocalTracks()
         }
         if (localVideoTrackRef.current) {
           try { localVideoTrackRef.current.stop(); localVideoTrackRef.current.close() } catch { /* Best-effort cleanup. */ }
@@ -262,21 +286,31 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         // Poll the decoded remote tracks directly. This reacts much faster
         // than Agora's volume-indicator event and lets the student speech
         // recognizer stop before room audio can echo into an answer.
+        //
+        // Only sustained, clearly audible speech counts. The gate used to
+        // trip at a level of 0.015, which an open microphone crosses on room
+        // noise alone and which echo routinely survives cancellation at. In a
+        // group viva that meant every member was permanently flagged as
+        // "somebody else is talking", their recogniser never started, and no
+        // answer was transcribed unless exactly one microphone was live.
         remoteAudioMonitorId = window.setInterval(() => {
-          const heardNow = [...remoteAudioTracks.values()].some((track) => {
+          const loudNow = [...remoteAudioTracks.values()].some((track) => {
             try {
-              return track.getVolumeLevel() >= 0.015
+              return track.getVolumeLevel() >= REMOTE_SPEECH_LEVEL
             } catch {
               return false
             }
           })
-          if (heardNow) remoteAudioLastHeardAt = Date.now()
+          remoteLoudSamples = loudNow ? remoteLoudSamples + 1 : 0
+          if (remoteLoudSamples >= REMOTE_SPEECH_SAMPLES) {
+            remoteAudioLastHeardAt = Date.now()
+          }
           const remoteActive = Date.now() - remoteAudioLastHeardAt < 600
           if (remoteActive !== remoteAudioWasActive) {
             remoteAudioWasActive = remoteActive
             onRemoteAudioActivityRef.current?.(remoteActive)
           }
-        }, 100)
+        }, REMOTE_AUDIO_POLL_MS)
 
         // Fetch token and roster from backend
         const credentials = await agoraService.getAgoraToken(sessionId)
@@ -410,6 +444,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         if (!active) {
           if (audioTrack) { audioTrack.stop(); audioTrack.close() }
           if (videoTrack) { videoTrack.stop(); videoTrack.close() }
+          releaseLocalTracks()
           await client.leave()
           clientRef.current = null
           return
@@ -490,6 +525,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         if (localAudioTrackRef.current) {
           try { localAudioTrackRef.current.stop(); localAudioTrackRef.current.close() } catch { /* Best-effort cleanup. */ }
           localAudioTrackRef.current = null
+          releaseLocalTracks()
         }
         if (localVideoTrackRef.current) {
           try { localVideoTrackRef.current.stop(); localVideoTrackRef.current.close() } catch { /* Best-effort cleanup. */ }
@@ -523,6 +559,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         localAudioTrackRef.current.stop()
         localAudioTrackRef.current.close()
         localAudioTrackRef.current = null
+        releaseLocalTracks()
       }
       if (localVideoTrackRef.current) {
         localVideoTrackRef.current.stop()

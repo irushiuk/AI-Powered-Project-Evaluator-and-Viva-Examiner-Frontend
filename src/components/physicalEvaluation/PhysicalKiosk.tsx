@@ -43,6 +43,11 @@ import {
   type SeatBinding,
 } from "@/components/physicalEvaluation/hooks/useReliableLiveSpeakerDetection";
 import { usePhysicalSessionRecorder } from "@/components/physicalEvaluation/hooks/usePhysicalSessionRecorder";
+import {
+  useSpeechDictation,
+  type DictationTranscriber,
+  type DictationUnavailableReason,
+} from "@/hooks/useSpeechDictation";
 import { captureBindingFrames } from "@/components/physicalEvaluation/hooks/captureBindingFrames";
 import { usePhysicalQuestionSpeech } from "@/components/physicalEvaluation/hooks/usePhysicalQuestionSpeech";
 
@@ -244,7 +249,11 @@ export default function PhysicalKiosk() {
   const [error, setError] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
-  const [isListening, setIsListening] = useState(false);
+  const [isBrowserListening, setIsBrowserListening] = useState(false);
+  // ElevenLabs Scribe transcribes answers; the browser recogniser is only the
+  // fallback for an outage, since its accuracy is noticeably worse.
+  const [dictationMode, setDictationMode] =
+    useState<"provider" | "browser">("provider");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showClosePanel, setShowClosePanel] = useState(false);
   const [closePin, setClosePin] = useState("");
@@ -253,6 +262,7 @@ export default function PhysicalKiosk() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const providerErrorsRef = useRef(0);
   const bootstrappedRef = useRef(false);
   const bindingInFlightRef = useRef<{
     sessionId: string;
@@ -292,7 +302,50 @@ export default function PhysicalKiosk() {
     }
   }, [mediaStream]);
 
+  const transcribeAnswer = useCallback<DictationTranscriber>(
+    (audio, signal) => {
+      const sessionId = activeSession?.session_id;
+      if (!sessionId) return Promise.resolve({ text: "", stt_status: "failed" as const });
+      return physicalEvaluationService.transcribeAnswerAudio(sessionId, audio, signal);
+    },
+    [activeSession?.session_id],
+  );
+
+  const handleDictationUnavailable = useCallback(
+    (reason: DictationUnavailableReason) => {
+      if (reason === "mic-blocked") {
+        toast.error("The microphone is blocked. Type the answer instead.");
+        return;
+      }
+      if (reason === "provider-error") {
+        providerErrorsRef.current += 1;
+        if (providerErrorsRef.current < 2) return;
+      }
+      setDictationMode("browser");
+    },
+    [],
+  );
+
+  const {
+    isListening: isProviderListening,
+    isTranscribing,
+    start: startDictation,
+    stop: stopDictation,
+    abort: abortDictation,
+  } = useSpeechDictation({
+    transcribe: transcribeAnswer,
+    onFinalTranscript: (text) => {
+      providerErrorsRef.current = 0;
+      setAnswer((current) => `${current}${current ? " " : ""}${text}`);
+    },
+    onUnavailable: handleDictationUnavailable,
+  });
+
+  const isListening =
+    dictationMode === "provider" ? isProviderListening : isBrowserListening;
+
   const stopSpeechRecognition = useCallback(() => {
+    abortDictation();
     if (speechRecognitionRef.current) {
       try {
         speechRecognitionRef.current.stop();
@@ -301,8 +354,24 @@ export default function PhysicalKiosk() {
       }
       speechRecognitionRef.current = null;
     }
-    setIsListening(false);
-  }, []);
+    setIsBrowserListening(false);
+  }, [abortDictation]);
+
+  /**
+   * Ends dictation and folds in whatever Scribe still owes us, so pressing
+   * Stop or Submit never drops the last sentence.
+   */
+  const finishListening = useCallback(async (): Promise<string> => {
+    if (dictationMode === "provider") return stopDictation();
+    stopSpeechRecognition();
+    return "";
+  }, [dictationMode, stopDictation, stopSpeechRecognition]);
+
+  // Dropping to the browser recogniser must release the recorder first, or two
+  // captures fight over the same microphone.
+  useEffect(() => {
+    if (dictationMode === "browser") abortDictation();
+  }, [abortDictation, dictationMode]);
 
   const {
     isSpeaking: isQuestionSpeaking,
@@ -898,13 +967,13 @@ export default function PhysicalKiosk() {
   };
 
   const submitAnswer = async () => {
-    if (
-      !activeSession ||
-      !question ||
-      !answer.trim() ||
-      busy ||
-      isQuestionSpeaking
-    ) return;
+    if (!activeSession || !question || busy || isQuestionSpeaking) return;
+
+    // Scribe may still hold the last sentence; it belongs in this submission.
+    const pending = isListening ? await finishListening() : "";
+    const finalAnswer = `${answer}${answer && pending ? " " : ""}${pending}`.trim();
+    if (!finalAnswer) return;
+    if (pending) setAnswer(finalAnswer);
     stopSpeechRecognition();
     setBusy(true);
     setAnswerProgress("evaluating");
@@ -919,7 +988,7 @@ export default function PhysicalKiosk() {
       const result = await submitAnswerWithRecovery(
         activeSession.session_id,
         question.question_id,
-        answer.trim(),
+        finalAnswer,
         activeSession.group ? "group" : speakerId,
       );
       if (result.session_complete) {
@@ -959,7 +1028,13 @@ export default function PhysicalKiosk() {
       return;
     }
     if (isListening) {
-      stopSpeechRecognition();
+      void finishListening().then((pending) => {
+        if (pending) setAnswer((current) => `${current}${current ? " " : ""}${pending}`);
+      });
+      return;
+    }
+    if (dictationMode === "provider") {
+      void startDictation();
       return;
     }
     void liveSpeaker.activateAudio();
@@ -998,16 +1073,16 @@ export default function PhysicalKiosk() {
     };
     recognition.onend = () => {
       speechRecognitionRef.current = null;
-      setIsListening(false);
+      setIsBrowserListening(false);
     };
     recognition.onerror = () => {
       speechRecognitionRef.current = null;
-      setIsListening(false);
+      setIsBrowserListening(false);
       toast.error("Speech input stopped. You can continue by typing.");
     };
     speechRecognitionRef.current = recognition;
     recognition.start();
-    setIsListening(true);
+    setIsBrowserListening(true);
   };
 
   const enterFullscreen = async () => {
@@ -1717,6 +1792,12 @@ export default function PhysicalKiosk() {
                 placeholder="Speak or type your answer here..."
                 className="w-full resize-none rounded-xl border border-slate-700 bg-slate-950 p-4 text-sm leading-6 text-slate-100 outline-none placeholder:text-slate-600 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/10 disabled:opacity-60"
               />
+              {isTranscribing && (
+                <p className="mt-1.5 flex items-center gap-2 text-xs text-slate-400">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Transcribing what was just said...
+                </p>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1742,7 +1823,11 @@ export default function PhysicalKiosk() {
               </Button>
               <Button
                 onClick={submitAnswer}
-                disabled={!answer.trim() || busy || isQuestionSpeaking}
+                disabled={
+                  (!answer.trim() && !isTranscribing && !isListening) ||
+                  busy ||
+                  isQuestionSpeaking
+                }
                 className="bg-indigo-600 text-white hover:bg-indigo-500"
               >
                 {busy ? (
