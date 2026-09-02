@@ -71,6 +71,15 @@ function closeScreenTrack(track: ScreenTrack) {
   }
 }
 
+/** Volume at which a remote participant counts as actually speaking.
+ *  Conversational speech sits well above this; an open microphone's room
+ *  noise and post-cancellation echo sit well below it. */
+const REMOTE_SPEECH_LEVEL = 0.12
+/** Consecutive loud polls before the room is treated as busy, so a cough or
+ *  a chair scrape cannot cut off the student who is mid-answer. */
+const REMOTE_SPEECH_SAMPLES = 3
+const REMOTE_AUDIO_POLL_MS = 100
+
 export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, overlayContent, className, onMicToggle, onLocalTracks, remoteJoinNotice, onScreenShareChange, initialMute, initialCamOff, hideEndCallButton, micEnabledOverride, onRemoteAudioActivity }: AgoraVideoRoomProps) {
   const [localVideoTrack, setLocalVideoTrack] = useState<ICameraVideoTrack | null>(null)
   // Refs keep the join effect's dependency list unchanged ([sessionId]).
@@ -230,6 +239,7 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
     let remoteAudioMonitorId: number | null = null
     let remoteAudioWasActive = false
     let remoteAudioLastHeardAt = 0
+    let remoteLoudSamples = 0
 
     const initAgora = async () => {
       try {
@@ -276,21 +286,31 @@ export default function AgoraVideoRoom({ sessionId, onLeave, extraControls, over
         // Poll the decoded remote tracks directly. This reacts much faster
         // than Agora's volume-indicator event and lets the student speech
         // recognizer stop before room audio can echo into an answer.
+        //
+        // Only sustained, clearly audible speech counts. The gate used to
+        // trip at a level of 0.015, which an open microphone crosses on room
+        // noise alone and which echo routinely survives cancellation at. In a
+        // group viva that meant every member was permanently flagged as
+        // "somebody else is talking", their recogniser never started, and no
+        // answer was transcribed unless exactly one microphone was live.
         remoteAudioMonitorId = window.setInterval(() => {
-          const heardNow = [...remoteAudioTracks.values()].some((track) => {
+          const loudNow = [...remoteAudioTracks.values()].some((track) => {
             try {
-              return track.getVolumeLevel() >= 0.015
+              return track.getVolumeLevel() >= REMOTE_SPEECH_LEVEL
             } catch {
               return false
             }
           })
-          if (heardNow) remoteAudioLastHeardAt = Date.now()
+          remoteLoudSamples = loudNow ? remoteLoudSamples + 1 : 0
+          if (remoteLoudSamples >= REMOTE_SPEECH_SAMPLES) {
+            remoteAudioLastHeardAt = Date.now()
+          }
           const remoteActive = Date.now() - remoteAudioLastHeardAt < 600
           if (remoteActive !== remoteAudioWasActive) {
             remoteAudioWasActive = remoteActive
             onRemoteAudioActivityRef.current?.(remoteActive)
           }
-        }, 100)
+        }, REMOTE_AUDIO_POLL_MS)
 
         // Fetch token and roster from backend
         const credentials = await agoraService.getAgoraToken(sessionId)

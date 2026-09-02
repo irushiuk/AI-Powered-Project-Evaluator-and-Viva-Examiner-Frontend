@@ -151,6 +151,27 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     clearInterimTranscript()
   }, [abortRecognition, clearInterimTranscript])
 
+  /**
+   * Leaves the examiner intervention and restores the parked AI answer.
+   *
+   * Previously the only way out was answering the examiner's question. If the
+   * examiner handed back to the AI instead, the panel stayed up, canListen
+   * stayed false, and the group-sync poll kept returning early on a question
+   * that was never going to clear - so that student stopped advancing while
+   * their teammates moved on. Safe to call on every poll: the two setState
+   * calls are no-ops once cleared, and the parked answer is restored once.
+   */
+  const endExaminerIntervention = useCallback(() => {
+    setExaminerQuestion(null)
+    setExaminerQuestionInProgress(false)
+    if (!interventionActiveRef.current) return
+    interventionActiveRef.current = false
+    const parkedAnswer = parkedAiAnswerRef.current
+    parkedAiAnswerRef.current = ''
+    answerTextRef.current = parkedAnswer
+    setAnswerText(parkedAnswer)
+  }, [])
+
   useEffect(() => {
     if (currentQuestion || examinerQuestion) setShowQAPanel(true)
   }, [currentQuestion, examinerQuestion])
@@ -255,24 +276,17 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
       try {
         const st = await liveQuestionService.status(sessionId)
         if (!mountedRef.current) return
-        setTakeoverStatus((previous) => (
-          isExaminerView || !previous
-            ? st
-            : { ...st, paused: previous.paused }
-        ))
+        // Take the server's paused flag verbatim. Students used to keep their
+        // own previous value here, so a resume never reached them from this
+        // poll at all.
+        setTakeoverStatus(st)
       } catch {
         // Status polling is resilient; the next interval retries.
       }
     }, 4000)
     // Initial fetch
     liveQuestionService.status(sessionId).then(st => {
-      if (mountedRef.current) {
-        setTakeoverStatus((previous) => (
-          isExaminerView || !previous
-            ? st
-            : { ...st, paused: previous.paused }
-        ))
-      }
+      if (mountedRef.current) setTakeoverStatus(st)
     }).catch(() => { })
     return () => window.clearInterval(id)
   }, [sessionId, hasFinished, phase, isExaminerView])
@@ -357,6 +371,9 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
           // Refresh text for a question that was first observed as a draft.
           setExaminerQuestion(pending)
           setExaminerQuestionInProgress(false)
+        } else if (!examiner_speaking) {
+          // Nothing outstanding: the examiner has handed the viva back.
+          endExaminerIntervention()
         }
       } catch {
         // transient poll failures are fine; next tick retries
@@ -370,6 +387,7 @@ export function LiveVivaRoom({ sessionId, isExaminerView }: LiveVivaRoomProps) {
     phase,
     isExaminerView,
     beginExaminerIntervention,
+    endExaminerIntervention,
   ])
 
   // Group sync: poll the latest AI question so a member's screen advances
