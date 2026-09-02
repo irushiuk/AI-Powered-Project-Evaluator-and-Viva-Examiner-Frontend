@@ -52,20 +52,23 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
 
   let session: StudentSession | null = null
   let results: SessionResults | null = null
+  let resultsStatus: 'ready' | 'pending_approval' | 'unavailable' = 'unavailable'
   let error: string | null = null
   const serverTime = new Date().toISOString()
 
   try {
     const sessionData = await serverSessionService.getMySession(projectId)
     if (sessionData.status === 'completed') {
-      results = await serverSessionService
+      const resultLoad = await serverSessionService
         .getCompletedSessionResults(
           projectId,
           sessionId,
           sessionData.submission_id,
           sessionData.latest_code_submission_id,
         )
-        .catch(() => null)
+        .catch(() => ({ status: 'unavailable' as const, results: null }))
+      results = resultLoad.results
+      resultsStatus = resultLoad.status
     }
 
     // Map backend response to frontend StudentSession type
@@ -126,7 +129,17 @@ export default async function SessionDetailPage({ params, searchParams }: PagePr
         {session.status === 'upcoming' && <SessionUpcomingView session={session} serverTime={serverTime} />}
         {session.status === 'ongoing' && <SessionOngoingView sessionId={sessionId} rubrics={session.rubrics} />}
         {session.status === 'completed' && session.results && <SessionCompletedView results={session.results} />}
-        {session.status === 'completed' && !session.results && (
+        {session.status === 'completed' && !session.results && resultsStatus === 'pending_approval' && (
+          <Card>
+            <CardContent className="pt-8">
+              <p className="font-medium text-amber-700">Waiting for examiner approval</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Your session is complete. Your final score will appear here after the examiner approves it.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+        {session.status === 'completed' && !session.results && resultsStatus === 'unavailable' && (
           <Card>
             <CardContent className="pt-8">
               <p className="text-muted-foreground">
