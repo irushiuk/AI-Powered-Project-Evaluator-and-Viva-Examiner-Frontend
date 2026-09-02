@@ -46,6 +46,12 @@ const CALIBRATION_MS = 500
  *  browser throttles animation frames, so an utterance still gets cut. */
 const MONITOR_INTERVAL_MS = 60
 const MIN_THRESHOLD = 0.012
+/** Ceiling on the calibrated gate. Calibration takes the loudest moment of
+ *  the first half second, so a teammate talking over the speakers while a
+ *  recorder starts would otherwise set a floor the student's own voice never
+ *  crosses - the recorder then runs forever without ever cutting a segment,
+ *  and nothing reaches the transcriber. Speech sits well above this. */
+const MAX_THRESHOLD = 0.06
 const FLOOR_MULTIPLIER = 2.5
 /** Below this a clip is silence or a clipped recorder start, not speech. */
 const MIN_CLIP_BYTES = 1_200
@@ -256,7 +262,10 @@ export function useSpeechDictation({
     if (now < calibrationUntilRef.current) {
       noiseFloorRef.current = Math.max(noiseFloorRef.current, rms)
     } else {
-      const threshold = Math.max(MIN_THRESHOLD, noiseFloorRef.current * FLOOR_MULTIPLIER)
+      const threshold = Math.min(
+        MAX_THRESHOLD,
+        Math.max(MIN_THRESHOLD, noiseFloorRef.current * FLOOR_MULTIPLIER),
+      )
       if (rms > threshold) {
         speechStartedRef.current = true
         lastVoiceAtRef.current = now
