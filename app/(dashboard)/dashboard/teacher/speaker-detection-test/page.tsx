@@ -5,7 +5,7 @@ import { ArrowLeft, Camera, CheckCircle2, Loader2, Mic, RefreshCw, UserRound, XC
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { attributionService, type SpeakerDetectionTestResult } from "@/services/attributionService"
-import { useLiveSpeakerDetection, type SeatBinding } from "@/components/physicalEvaluation/hooks/useLiveSpeakerDetection"
+import { useReliableLiveSpeakerDetection, type SeatBinding } from "@/components/physicalEvaluation/hooks/useReliableLiveSpeakerDetection"
 import { captureBindingFrames } from "@/components/physicalEvaluation/hooks/captureBindingFrames"
 
 export default function SpeakerDetectionTestPage() {
@@ -26,7 +26,7 @@ export default function SpeakerDetectionTestPage() {
     }
     return [...people.values()]
   }, [result])
-  const detector = useLiveSpeakerDetection({
+  const detector = useReliableLiveSpeakerDetection({
     enabled: Boolean(stream && bindings.some((item) => item.student_id)),
     sessionId: null,
     videoRef,
@@ -132,11 +132,30 @@ export default function SpeakerDetectionTestPage() {
               <div className="flex items-center gap-2">
                 {detector.status === "speaking" ? <Mic className="h-5 w-5 text-emerald-600" /> : <UserRound className="h-5 w-5 text-gray-500" />}
                 <span className="font-semibold text-gray-900">
-                  {detector.status === "speaking" ? `${detector.studentName} is speaking` : detector.status === "uncertain" ? "Voice heard — speaker uncertain" : detector.status === "loading" ? "Waiting for successful face binding" : detector.status === "unavailable" ? "Detection unavailable" : "Ready and listening"}
+                  {detector.status === "speaking"
+                    ? `${detector.studentName} is speaking`
+                    : detector.status === "uncertain"
+                      ? "Voice heard — speaker uncertain"
+                      : detector.status === "loading"
+                        ? "Waiting for successful face binding"
+                        : detector.status === "audio_blocked"
+                          ? "Microphone analysis needs activation"
+                          : detector.status === "no_faces"
+                            ? "No faces visible"
+                            : detector.status === "tracking_lost"
+                              ? "Face tracking lost"
+                              : detector.status === "unavailable"
+                                ? "Detection unavailable"
+                                : "Ready and listening"}
                 </span>
               </div>
               {detector.status === "speaking" && <p className="mt-2 text-sm text-emerald-700">Confidence: {Math.round(detector.confidence * 100)}%</p>}
               {detector.error && <p className="mt-2 text-sm text-red-600">{detector.error}</p>}
+              {detector.status === "audio_blocked" && (
+                <Button onClick={() => void detector.activateAudio()} size="sm" className="mt-3">
+                  <Mic className="h-4 w-4" /> Enable microphone analysis
+                </Button>
+              )}
             </div>
             {result && (
               <div className="mt-4 space-y-3">

@@ -39,9 +39,9 @@ import type {
 } from "@/types/physicalEvaluation";
 import type { VivaQuestion } from "@/types/vivaSession";
 import {
-  useLiveSpeakerDetection,
+  useReliableLiveSpeakerDetection,
   type SeatBinding,
-} from "@/components/physicalEvaluation/hooks/useLiveSpeakerDetection";
+} from "@/components/physicalEvaluation/hooks/useReliableLiveSpeakerDetection";
 import { usePhysicalSessionRecorder } from "@/components/physicalEvaluation/hooks/usePhysicalSessionRecorder";
 import { captureBindingFrames } from "@/components/physicalEvaluation/hooks/captureBindingFrames";
 import { usePhysicalQuestionSpeech } from "@/components/physicalEvaluation/hooks/usePhysicalQuestionSpeech";
@@ -228,7 +228,7 @@ export default function PhysicalKiosk() {
   const [missingEnrollment, setMissingEnrollment] = useState<string[]>([]);
   const [seatBindings, setSeatBindings] = useState<SeatBinding[]>([]);
   const [faceBindingStatus, setFaceBindingStatus] = useState<
-    "idle" | "scanning" | "ready" | "failed"
+    "idle" | "scanning" | "ready" | "partial" | "failed"
   >("idle");
   const [faceBindingError, setFaceBindingError] = useState("");
   const [identityReview, setIdentityReview] =
@@ -315,17 +315,21 @@ export default function PhysicalKiosk() {
     onPlaybackStart: stopSpeechRecognition,
   });
 
-  const liveSpeaker = useLiveSpeakerDetection({
+  const liveSpeaker = useReliableLiveSpeakerDetection({
     enabled:
-      phase === "viva" &&
-      Boolean(activeSession?.group),
-    paused: isQuestionSpeaking,
+      Boolean(activeSession?.group) &&
+      seatBindings.some((binding) => Boolean(binding.student_id)) &&
+      ["preparing", "identity_review", "sensor_setup", "demo", "viva"].includes(phase),
+    // Keep face tracks warm in every post-binding phase. Only create scoring
+    // evidence during an active answer window.
+    paused: isQuestionSpeaking || phase !== "viva" || busy,
     sessionId: activeSession?.session_id || null,
     videoRef,
     stream: mediaStream,
     bindings: seatBindings,
     names: studentNames,
     maxFaces: activeSession?.group?.members.length || 1,
+    persistEvidence: phase === "viva",
   });
 
   const startCamera = useCallback(async () => {
@@ -535,6 +539,10 @@ export default function PhysicalKiosk() {
           setFaceBindingStatus("ready");
           return result;
         }
+        if (result.partial || result.can_continue) {
+          setFaceBindingStatus("partial");
+          return result;
+        }
         setFaceBindingStatus("failed");
         setFaceBindingError(
           result.error || "Every expected member must be verified and extra faces must leave the frame.",
@@ -616,12 +624,14 @@ export default function PhysicalKiosk() {
   }, [activeSession, busy, identityOverridePin, identityOverrideReason]);
 
   const continueAfterIdentityReview = useCallback(() => {
-    if (!identityReview?.complete && !identityOverrideAccepted) return;
+    if (!(identityReview?.can_continue ?? identityReview?.complete) && !identityOverrideAccepted) return;
+    void liveSpeaker.activateAudio();
     setPhase("sensor_setup");
-  }, [identityOverrideAccepted, identityReview]);
+  }, [identityOverrideAccepted, identityReview, liveSpeaker]);
 
   const continueAfterSensorSetup = useCallback(async () => {
     if (!activeSession) return;
+    await liveSpeaker.activateAudio();
     if (nextEvaluationPhase === "demo") {
       setBusy(true);
       setError("");
@@ -640,7 +650,7 @@ export default function PhysicalKiosk() {
       return;
     }
     await beginViva(activeSession);
-  }, [activeSession, beginViva, nextEvaluationPhase, startProtectedRecording]);
+  }, [activeSession, beginViva, liveSpeaker, nextEvaluationPhase, startProtectedRecording]);
 
   const resumeActiveRun = useCallback(
     async (run: PhysicalRun) => {
@@ -684,6 +694,13 @@ export default function PhysicalKiosk() {
           setIdentityReview(stored);
           setSeatBindings(stored.bindings || []);
           setMissingEnrollment(stored.missing_enrollment || []);
+          setFaceBindingStatus(
+            run.identity_status === "verified"
+              ? "ready"
+              : run.identity_status === "partial"
+                ? "partial"
+                : "failed",
+          );
         }
         setIdentityOverrideAccepted(run.identity_status === "overridden");
       }
@@ -863,6 +880,7 @@ export default function PhysicalKiosk() {
 
   const finishDemo = async () => {
     if (!activeSession || busy) return;
+    await liveSpeaker.activateAudio();
     setBusy(true);
     setError("");
     try {
@@ -944,6 +962,7 @@ export default function PhysicalKiosk() {
       stopSpeechRecognition();
       return;
     }
+    void liveSpeaker.activateAudio();
     const speechWindow = window as typeof window & {
       SpeechRecognition?: SpeechRecognitionConstructor;
       webkitSpeechRecognition?: SpeechRecognitionConstructor;
@@ -1331,18 +1350,22 @@ export default function PhysicalKiosk() {
                   Required identity review
                 </p>
                 <h2 className="mt-1 text-2xl font-semibold text-white">
-                  Confirm every expected group member
+                  Confirm the group members who are present
                 </h2>
               </div>
               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
                 identityReview?.complete
                   ? "bg-emerald-500/15 text-emerald-300"
+                  : identityReview?.partial
+                    ? "bg-blue-500/15 text-blue-300"
                   : identityOverrideAccepted
                     ? "bg-amber-500/15 text-amber-300"
                     : "bg-red-500/15 text-red-300"
               }`}>
                 {identityReview?.complete
                   ? "All verified"
+                  : identityReview?.partial
+                    ? "Present members verified"
                   : identityOverrideAccepted
                     ? "Examiner override recorded"
                     : "Blocked"}
@@ -1367,7 +1390,7 @@ export default function PhysicalKiosk() {
                       ) : unusable ? (
                         <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400" />
                       ) : (
-                        <XCircle className="h-5 w-5 shrink-0 text-red-400" />
+                        <XCircle className="h-5 w-5 shrink-0 text-amber-400" />
                       )}
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-white">{member.full_name}</p>
@@ -1376,9 +1399,9 @@ export default function PhysicalKiosk() {
                     </div>
                     <div className="text-right">
                       <p className={`text-xs font-semibold ${
-                        verified ? "text-emerald-300" : unusable ? "text-amber-300" : "text-red-300"
+                        verified ? "text-emerald-300" : "text-amber-300"
                       }`}>
-                        {verified ? "Verified" : unusable ? "No usable enrollment" : "Not detected"}
+                        {verified ? "Verified present" : unusable ? "No usable enrollment" : "Absent / not detected"}
                       </p>
                       {verified && typeof member.confidence === "number" && (
                         <p className="mt-0.5 text-[11px] text-slate-500">
@@ -1394,6 +1417,11 @@ export default function PhysicalKiosk() {
             {(identityReview?.unknown_faces.length || 0) > 0 && (
               <p className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
                 {identityReview?.unknown_faces.length} unknown/extra face{identityReview?.unknown_faces.length === 1 ? "" : "s"} detected. Red boxes are shown over the camera preview.
+              </p>
+            )}
+            {identityReview?.partial && (
+              <p className="mt-4 rounded-xl border border-blue-400/25 bg-blue-400/10 p-3 text-sm text-blue-200">
+                Continue with the verified students shown above. Absent members are recorded and will not receive automatic speaker credit.
               </p>
             )}
             <p className="mt-3 text-xs text-slate-500">
@@ -1419,14 +1447,14 @@ export default function PhysicalKiosk() {
               </Button>
               <Button
                 onClick={continueAfterIdentityReview}
-                disabled={!identityReview?.complete && !identityOverrideAccepted}
+                disabled={!(identityReview?.can_continue ?? identityReview?.complete) && !identityOverrideAccepted}
                 className="bg-emerald-600 text-white hover:bg-emerald-500"
               >
                 Continue to heart-rate setup
               </Button>
             </div>
 
-            {!identityReview?.complete && !identityOverrideAccepted && (
+            {!(identityReview?.can_continue ?? identityReview?.complete) && !identityOverrideAccepted && (
               <div className="mt-6 border-t border-slate-800 pt-5">
                 <p className="text-sm font-semibold text-amber-300">Examiner PIN override</p>
                 <p className="mt-1 text-xs leading-5 text-slate-500">
@@ -1590,13 +1618,13 @@ export default function PhysicalKiosk() {
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs font-medium text-slate-300">Automatic speaker detection</span>
                   <span className={`text-xs font-semibold ${
-                    faceBindingStatus === "failed" ? "text-amber-400" :
+                    faceBindingStatus === "failed" && recognizedStudentNames.length === 0 ? "text-amber-400" :
                     isQuestionSpeaking ? "text-indigo-300" :
                     liveSpeaker.status === "speaking" ? "text-emerald-400" :
-                    liveSpeaker.status === "uncertain" || liveSpeaker.status === "unavailable" ? "text-amber-400" :
+                    ["uncertain", "audio_blocked", "no_faces", "tracking_lost", "unavailable"].includes(liveSpeaker.status) ? "text-amber-400" :
                     "text-slate-400"
                   }`}>
-                    {faceBindingStatus === "failed"
+                    {faceBindingStatus === "failed" && recognizedStudentNames.length === 0
                       ? "Identification failed"
                       : isQuestionSpeaking
                         ? "Paused while AI examiner speaks"
@@ -1604,7 +1632,13 @@ export default function PhysicalKiosk() {
                       ? `${liveSpeaker.studentName} is speaking`
                       : liveSpeaker.status === "uncertain"
                         ? "Speaker uncertain"
-                        : faceBindingStatus === "scanning" || liveSpeaker.status === "loading"
+                        : liveSpeaker.status === "audio_blocked"
+                          ? "Microphone analysis needs activation"
+                          : liveSpeaker.status === "no_faces"
+                            ? "No participant faces visible"
+                            : liveSpeaker.status === "tracking_lost"
+                              ? "Face tracking lost — keep seats visible"
+                         : faceBindingStatus === "scanning" || liveSpeaker.status === "loading"
                           ? "Identifying students…"
                           : liveSpeaker.status === "unavailable"
                             ? "Unavailable — examiner review required"
@@ -1621,7 +1655,26 @@ export default function PhysicalKiosk() {
                     Identified: {recognizedStudentNames.join(", ")}
                   </p>
                 )}
+                {(identityReview?.absent_student_ids?.length || 0) > 0 && (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Absent: {(identityReview?.roster || [])
+                      .filter((member) => identityReview?.absent_student_ids?.includes(member.student_id))
+                      .map((member) => member.full_name)
+                      .join(", ")}
+                  </p>
+                )}
                 {liveSpeaker.error && <p className="mt-1 text-xs text-amber-400">{liveSpeaker.error}</p>}
+                {liveSpeaker.status === "audio_blocked" && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void liveSpeaker.activateAudio()}
+                    className="mt-2 h-7 border-amber-400/30 bg-transparent px-2 text-xs text-amber-200 hover:bg-amber-400/10 hover:text-amber-100"
+                  >
+                    <Mic className="h-3.5 w-3.5" /> Enable microphone analysis
+                  </Button>
+                )}
                 {faceBindingError && (
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
                     <p className="text-xs text-amber-300">{faceBindingError}</p>

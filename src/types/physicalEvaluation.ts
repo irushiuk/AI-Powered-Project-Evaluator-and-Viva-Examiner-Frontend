@@ -73,6 +73,8 @@ export type PhysicalIdentityBinding = {
 
 export type PhysicalIdentityReview = {
   complete: boolean;
+  partial?: boolean;
+  can_continue?: boolean;
   roster: Array<{
     student_id: string;
     full_name: string;
@@ -84,6 +86,8 @@ export type PhysicalIdentityReview = {
     bbox?: number[] | null;
   }>;
   bindings: PhysicalIdentityBinding[];
+  present_student_ids?: string[];
+  absent_student_ids?: string[];
   unknown_faces: PhysicalIdentityBinding[];
   unmatched: number;
   missing_enrollment: string[];
@@ -108,7 +112,7 @@ export type PhysicalRun = {
   completed_at: string | null;
   next_action?: "start_demo" | "start_viva";
   recording_upload?: PhysicalRecordingUpload | null;
-  identity_status: "pending" | "verified" | "overridden" | "not_required";
+  identity_status: "pending" | "verified" | "partial" | "overridden" | "not_required";
   identity_verification: PhysicalIdentityReview | Record<string, never>;
   identity_verified_at: string | null;
   identity_override_at: string | null;
