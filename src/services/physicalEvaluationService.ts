@@ -420,14 +420,38 @@ export const physicalEvaluationService = {
    * unbound stream rather than guessing whose pulse it is, so nothing is
    * recorded until this is called.
    */
-  async getPhysioDevice(sessionId: string): Promise<PhysioDeviceState | null> {
+  /**
+   * Heart-rate panel state, or the reason there is none.
+   *
+   * This used to collapse every failure to null, and the panel renders
+   * nothing when it has no state. A group session that has not finished
+   * identity review answers 409 here, so the whole heart-rate step vanished
+   * from the kiosk with no explanation and the band looked unrecognised when
+   * it was in fact streaming perfectly.
+   */
+  async getPhysioDevice(
+    sessionId: string,
+  ): Promise<{ data: PhysioDeviceState | null; reason: string }> {
     try {
       const response = await kioskFetch(PHYSIO_API.device(sessionId));
-      if (!response.ok) return null;
       const payload = await response.json().catch(() => null);
-      return payload?.data ?? null;
+      if (!response.ok) {
+        return {
+          data: null,
+          reason:
+            payload?.message ||
+            payload?.error ||
+            (response.status === 409
+              ? "Finish identity review first — heart-rate setup unlocks after it."
+              : `The heart-rate service answered ${response.status}.`),
+        };
+      }
+      return { data: payload?.data ?? null, reason: "" };
     } catch {
-      return null;
+      return {
+        data: null,
+        reason: "Could not reach the heart-rate service from this kiosk.",
+      };
     }
   },
 
