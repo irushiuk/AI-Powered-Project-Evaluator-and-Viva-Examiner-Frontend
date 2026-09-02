@@ -58,6 +58,11 @@ type SonarSummary = {
   }
 }
 
+export type CompletedSessionResultsLoad = {
+  status: 'ready' | 'pending_approval' | 'unavailable'
+  results: SessionResults | null
+}
+
 function formatDuplication(value: unknown) {
   if (typeof value === 'number') return `${value}%`
   if (typeof value === 'string') return value.includes('%') ? value : `${value}%`
@@ -160,14 +165,17 @@ export const serverSessionService = {
     sessionId: string,
     submissionId?: string | null,
     latestCodeSubmissionId?: string | null,
-  ): Promise<SessionResults | null> {
+  ): Promise<CompletedSessionResultsLoad> {
     const [submissionRes, reportRes] = await Promise.all([
-      serverFetch(PROJECT_API.submission(projectId), { method: 'GET' }),
-      serverFetch(VIVA_API.sessionReport(sessionId), { method: 'GET' }),
+      serverFetch(PROJECT_API.submission(projectId), { method: 'GET', cache: 'no-store' }),
+      serverFetch(VIVA_API.sessionReport(sessionId), { method: 'GET', cache: 'no-store' }),
     ])
 
+    if (reportRes.status === 202) {
+      return { status: 'pending_approval', results: null }
+    }
     if (!submissionRes.ok || !reportRes.ok) {
-      return null
+      return { status: 'unavailable', results: null }
     }
 
     const submissionData = await submissionRes.json()
@@ -175,7 +183,7 @@ export const serverSessionService = {
     const submission: SubmissionDetail | null = Array.isArray(submissions)
       ? (submissions.find((item: { id?: string }) => item.id === submissionId) ?? submissions[0] ?? null)
       : null
-    if (!submission) return null
+    if (!submission) return { status: 'unavailable', results: null }
 
     const reportData = await reportRes.json()
     let rawReport = reportData.data ?? reportData
@@ -211,33 +219,36 @@ export const serverSessionService = {
     )
 
     return {
-      score: weightedScore,
-      scoreMaximum,
-      scorePercentage: score100,
-      scores_status: report.scores_status || 'draft',
-      summary:
-        report.xai_report?.overall_summary ||
-        report.xai_report?.strengths ||
-        'No final viva summary was returned.',
-      submission: {
-        repo: submission.github_repo_url || 'No GitHub repository provided',
-        report: submission.report_file_url.split('/').pop() || 'Project Report',
-        reportUrl: submission.report_file_url,
+      status: 'ready',
+      results: {
+        score: weightedScore,
+        scoreMaximum,
+        scorePercentage: score100,
+        scores_status: report.scores_status || 'draft',
+        summary:
+          report.xai_report?.overall_summary ||
+          report.xai_report?.strengths ||
+          'No final viva summary was returned.',
+        submission: {
+          repo: submission.github_repo_url || 'No GitHub repository provided',
+          report: submission.report_file_url.split('/').pop() || 'Project Report',
+          reportUrl: submission.report_file_url,
+        },
+        codeAnalysis: {
+          bugs: Number(sonarMetrics.bugs ?? 0),
+          vulnerabilities: Number(sonarMetrics.vulnerabilities ?? 0),
+          smells: Number(sonarMetrics.code_smells ?? 0),
+          duplication: formatDuplication(sonarMetrics.duplicated_lines_density),
+          maintainability: mapMaintainability(dashboardMaintainability ?? sonarMetrics.maintainability_rating),
+        },
+        aiEvaluation: buildAiEvaluation(report),
+        transcript: report.transcript ?? [],
+        feedback:
+          report.xai_report?.examiner_recommendation ||
+          report.xai_report?.gaps ||
+          report.xai_report?.strengths ||
+          'No feedback was returned.',
       },
-      codeAnalysis: {
-        bugs: Number(sonarMetrics.bugs ?? 0),
-        vulnerabilities: Number(sonarMetrics.vulnerabilities ?? 0),
-        smells: Number(sonarMetrics.code_smells ?? 0),
-        duplication: formatDuplication(sonarMetrics.duplicated_lines_density),
-        maintainability: mapMaintainability(dashboardMaintainability ?? sonarMetrics.maintainability_rating),
-      },
-      aiEvaluation: buildAiEvaluation(report),
-      transcript: report.transcript ?? [],
-      feedback:
-        report.xai_report?.examiner_recommendation ||
-        report.xai_report?.gaps ||
-        report.xai_report?.strengths ||
-        'No feedback was returned.',
     }
   },
 }
