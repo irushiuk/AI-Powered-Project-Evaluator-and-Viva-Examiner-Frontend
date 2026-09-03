@@ -1,41 +1,79 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 import { UploadCloud, File, Trash2, CheckCircle2, Clock, XCircle } from "lucide-react"
 
 import { apiFetch } from "@/services/apiClient"
+import { MODULE_MATERIALS_API } from "@/constants/api.constant"
+
+const MAX_MODULE_FILE_BYTES = 50 * 1024 * 1024
+const ALLOWED_MODULE_EXTENSIONS = [".pdf", ".pptx", ".docx"]
+
+interface ModuleMaterial {
+  id: string
+  original_filename: string
+  processing_status: "pending" | "completed" | "failed"
+  uploaded_at: string
+}
+
+async function responseErrorMessage(response: Response): Promise<string> {
+  const contentType = response.headers.get("content-type") || ""
+  if (contentType.includes("application/json")) {
+    const payload = await response.json().catch(() => null)
+    if (payload && typeof payload.error === "string") return payload.error
+    if (payload && typeof payload.detail === "string") return payload.detail
+  }
+
+  const message = (await response.text().catch(() => "")).trim()
+  return message && message !== "Internal Server Error"
+    ? message
+    : "The server could not upload this file. Please try again."
+}
 
 export default function ModuleContentTab({ projectId }: { projectId: string }) {
-  const [materials, setMaterials] = useState<any[]>([])
+  const [materials, setMaterials] = useState<ModuleMaterial[]>([])
   const [stagedFiles, setStagedFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [materialToDelete, setMaterialToDelete] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const fetchMaterials = async () => {
+  const fetchMaterials = useCallback(async () => {
     try {
-      const res = await apiFetch(`/api/viva/projects/${projectId}/module-materials/`)
+      const res = await apiFetch(MODULE_MATERIALS_API.list(projectId))
       if (res.ok) {
         const data = await res.json()
         setMaterials(data)
       }
-    } catch (e) {
+    } catch {
       toast.error("Failed to load module materials")
     } finally {
       setLoading(false)
     }
-  }
+  }, [projectId])
 
   useEffect(() => {
     fetchMaterials()
-  }, [projectId])
+  }, [fetchMaterials])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newFiles = Array.from(e.target.files)
-      setStagedFiles(prev => [...prev, ...newFiles])
+      const selectedFiles = Array.from(e.target.files)
+      const validFiles = selectedFiles.filter((file) => {
+        const lowerName = file.name.toLowerCase()
+        const extensionAllowed = ALLOWED_MODULE_EXTENSIONS.some((ext) => lowerName.endsWith(ext))
+        if (!extensionAllowed) {
+          toast.error(`${file.name}: only PDF, PPTX, and DOCX files are supported.`)
+          return false
+        }
+        if (file.size > MAX_MODULE_FILE_BYTES) {
+          toast.error(`${file.name}: the maximum file size is 50 MB.`)
+          return false
+        }
+        return true
+      })
+      setStagedFiles(prev => [...prev, ...validFiles])
     }
     // clear the input so the same files can be selected again if needed
     e.target.value = ''
@@ -51,12 +89,13 @@ export default function ModuleContentTab({ projectId }: { projectId: string }) {
     
     let successCount = 0
     let failCount = 0
+    let firstFailureMessage = ""
 
     for (const file of stagedFiles) {
       const formData = new FormData()
       formData.append("file", file)
       try {
-        const res = await apiFetch(`/api/viva/projects/${projectId}/module-materials/upload/`, {
+        const res = await apiFetch(MODULE_MATERIALS_API.upload(projectId), {
           method: 'POST',
           body: formData
         })
@@ -64,9 +103,13 @@ export default function ModuleContentTab({ projectId }: { projectId: string }) {
           successCount++
         } else {
           failCount++
+          if (!firstFailureMessage) firstFailureMessage = await responseErrorMessage(res)
         }
-      } catch (error) {
+      } catch {
         failCount++
+        if (!firstFailureMessage) {
+          firstFailureMessage = "The upload service could not be reached. Please check the connection and try again."
+        }
       }
     }
 
@@ -75,7 +118,11 @@ export default function ModuleContentTab({ projectId }: { projectId: string }) {
       fetchMaterials()
     }
     if (failCount > 0) {
-      toast.error(`Failed to upload ${failCount} file(s)`)
+      toast.error(
+        failCount === 1
+          ? firstFailureMessage
+          : `${failCount} files failed. ${firstFailureMessage}`
+      )
     }
     
     setStagedFiles([])
@@ -93,7 +140,7 @@ export default function ModuleContentTab({ projectId }: { projectId: string }) {
   const handleDeleteMaterial = async (materialId: string) => {
     setIsDeleting(true)
     try {
-      const res = await apiFetch(`/api/viva/projects/${projectId}/module-materials/${materialId}/`, {
+      const res = await apiFetch(MODULE_MATERIALS_API.detail(projectId, materialId), {
         method: 'DELETE'
       })
       if (res.ok || res.status === 204) {
@@ -102,7 +149,7 @@ export default function ModuleContentTab({ projectId }: { projectId: string }) {
       } else {
         toast.error("Failed to delete material")
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred while deleting")
     } finally {
       setIsDeleting(false)
