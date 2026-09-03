@@ -10,6 +10,13 @@ const SERVER_API_BASE =
 
 export const API_BASE = typeof window === 'undefined' ? SERVER_API_BASE : CLIENT_API_BASE
 
+// Multipart uploads are sent directly to the production API. The generic
+// Next.js rewrite can replace an upstream upload failure with an opaque
+// text/plain 500 response, hiding the backend's actionable JSON error.
+const MODULE_UPLOAD_API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE ||
+  (process.env.NODE_ENV === 'production' ? 'https://api.vivasense.tech/api' : API_BASE)
+
 export const AUTH_API = {
   login: `${API_BASE}/auth/login/`,
   refresh: `${API_BASE}/auth/token/refresh/`,
@@ -48,6 +55,14 @@ export const PROJECTS_API = {
   createVivaQuestion: (id: string) => `${API_BASE}/projects/${id}/viva/questions/create/`,
   updateVivaQuestion: (pid: string, qid: string) => `${API_BASE}/projects/${pid}/viva/questions/${qid}/update/`,
   deleteVivaQuestion: (pid: string, qid: string) => `${API_BASE}/projects/${pid}/viva/questions/${qid}/delete/`,
+}
+
+export const MODULE_MATERIALS_API = {
+  list: (projectId: string) => `${API_BASE}/viva/projects/${projectId}/module-materials/`,
+  upload: (projectId: string) =>
+    `${MODULE_UPLOAD_API_BASE}/viva/projects/${projectId}/module-materials/upload/`,
+  detail: (projectId: string, materialId: string) =>
+    `${API_BASE}/viva/projects/${projectId}/module-materials/${materialId}/`,
 }
  
 export const SESSIONS_API = {
