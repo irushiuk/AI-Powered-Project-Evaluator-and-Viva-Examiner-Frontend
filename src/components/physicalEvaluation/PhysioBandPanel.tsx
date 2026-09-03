@@ -7,8 +7,16 @@ import {
   type PhysioDeviceState,
 } from '@/services/physicalEvaluationService'
 
-const CALM_SECONDS = 45
-const POLL_MS = 3000
+/** Length of the calm window, in seconds.
+ *
+ * This is dead time in front of an examiner, so it is kept as short as the
+ * measurement tolerates. Ten seconds holds roughly eight beats at a slow
+ * resting rate, which is why the backend's baseline usability floor is set to
+ * match (`MIN_BASELINE_BEATS`) rather than to the 30 s analysis figure. */
+const CALM_SECONDS = 10
+/** Setup polling. Every transition here - bound, live, captured - costs the
+ *  operator up to one interval, and there are several of them in a row. */
+const POLL_MS = 1500
 /** How many times to silently retry a failed capture before asking for help. */
 const MAX_ATTEMPTS = 3
 
@@ -39,6 +47,7 @@ export default function PhysioBandPanel({ sessionId }: { sessionId: string }) {
   const [remaining, setRemaining] = useState<number | null>(null)
   const [attempts, setAttempts] = useState(0)
   const [error, setError] = useState('')
+  const [unavailable, setUnavailable] = useState('')
 
   // Refs, not state: the poll loop reads these and must not re-subscribe.
   const capturingRef = useRef(false)
@@ -50,7 +59,8 @@ export default function PhysioBandPanel({ sessionId }: { sessionId: string }) {
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = useCallback(async () => {
-    const data = await physicalEvaluationService.getPhysioDevice(sessionId)
+    const { data, reason } = await physicalEvaluationService.getPhysioDevice(sessionId)
+    setUnavailable(data ? '' : reason)
     if (!data) return null
     setState(data)
     if (data.student_id) setStudentId(data.student_id)
@@ -154,7 +164,24 @@ export default function PhysioBandPanel({ sessionId }: { sessionId: string }) {
     }
   }
 
-  if (!state || state.roster.length === 0) return null
+  if (!state || state.roster.length === 0) {
+    if (!unavailable) return null
+    return (
+      <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
+        <div className="flex items-center gap-2 text-rose-300">
+          <HeartPulse className="h-4 w-4" />
+          <span className="text-sm font-semibold">Heart-rate band</span>
+          <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+            Optional
+          </span>
+        </div>
+        <p className="mt-3 text-sm text-amber-300">{unavailable}</p>
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">
+          The viva can go ahead without it. Continue when you are ready.
+        </p>
+      </div>
+    )
+  }
 
   const needsWearer = !state.student_id && state.roster.length > 1
   const status = describe(state, remaining, attempts)
